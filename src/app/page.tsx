@@ -1,44 +1,27 @@
-import { rawPrisma } from "@/lib/db/client";
+import Link from "next/link";
+import { getDemoOrg } from "@/lib/demo-org";
 import { orgScopedClient } from "@/lib/db/tenant";
 
 export const dynamic = "force-dynamic";
 
-const HEALTH_STYLE: Record<string, string> = {
-  OK: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300",
-  FALLBACK_REGION: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
-  AMBIGUOUS: "bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300",
-  BROKEN: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
-};
-
 const STATUS_STYLE: Record<string, string> = {
-  NOT_STARTED: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
+  NOT_STARTED: "bg-track text-ink2",
   IN_PROGRESS: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300",
   IN_REVIEW: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300",
   APPROVED: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300",
-  LOCKED: "bg-zinc-200 text-zinc-800 dark:bg-zinc-700 dark:text-zinc-200",
+  LOCKED: "bg-track text-ink",
 };
 
-async function getDemoOrgData() {
-  const org = await rawPrisma.organization.findFirst({
-    where: { legalName: "Meridian Industries (Demo)" },
-  });
+async function getDashboardData() {
+  const org = await getDemoOrg();
   if (!org) return null;
 
   const db = orgScopedClient(org.id);
-
   const [sites, template] = await Promise.all([
-    db.site.findMany({
-      include: { assignments: true },
-      orderBy: { code: "asc" },
-    }),
+    db.site.findMany({ include: { assignments: true }, orderBy: { code: "asc" } }),
     db.questionnaireTemplate.findFirst({
       where: { status: "PUBLISHED" },
-      include: {
-        sections: {
-          orderBy: { sortOrder: "asc" },
-          include: { questions: { include: { binding: true }, orderBy: { sortOrder: "asc" } } },
-        },
-      },
+      include: { sections: { include: { questions: { include: { binding: true } } } } },
     }),
   ]);
 
@@ -46,102 +29,110 @@ async function getDemoOrgData() {
     .flatMap((s) => s.questions)
     .map((q) => q.binding)
     .filter((b): b is NonNullable<typeof b> => b !== null);
+  const issues = bindings.filter((b) => b.health !== "OK").length;
 
-  const healthCounts = { OK: 0, FALLBACK_REGION: 0, AMBIGUOUS: 0, BROKEN: 0 } as Record<string, number>;
-  for (const b of bindings) healthCounts[b.health] = (healthCounts[b.health] ?? 0) + 1;
+  const reporting = sites.filter((s) => s.assignments[0]?.status !== "NOT_STARTED" && s.assignments[0]);
+  const avgCompleteness =
+    sites.length === 0
+      ? 0
+      : sites.reduce((sum, s) => sum + Number(s.assignments[0]?.completenessPct ?? 0), 0) / sites.length;
 
-  return { org, sites, bindingCount: bindings.length, healthCounts };
+  return { org, sites, bindingCount: bindings.length, issues, reporting: reporting.length, avgCompleteness };
+}
+
+function Tile({ label, value, unit, note }: { label: string; value: string; unit?: string; note?: string }) {
+  return (
+    <div className="rounded-[11px] border border-border bg-surface p-4">
+      <div className="text-[11.5px] font-semibold uppercase tracking-wide text-muted">{label}</div>
+      <div className="mt-1 text-[26px] font-semibold tracking-tight">
+        {value} {unit && <small className="text-sm font-medium text-ink2">{unit}</small>}
+      </div>
+      {note && <div className="text-xs text-ink2">{note}</div>}
+    </div>
+  );
 }
 
 export default async function Home() {
-  const data = await getDemoOrgData();
+  const data = await getDashboardData();
 
   if (!data) {
     return (
-      <main className="flex flex-1 items-center justify-center p-16 text-center">
-        <p className="text-zinc-600 dark:text-zinc-400">
-          No demo organisation found — run <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">npm run db:seed</code>.
-        </p>
-      </main>
+      <p className="text-sm text-ink2">
+        No demo organisation found — run <code className="rounded bg-track px-1.5 py-0.5 font-mono text-xs">npm run db:seed</code>.
+      </p>
     );
   }
 
-  const { org, sites, bindingCount, healthCounts } = data;
+  const { sites, bindingCount, issues, reporting, avgCompleteness } = data;
 
   return (
-    <main className="mx-auto w-full max-w-4xl flex-1 px-6 py-16 sm:px-10">
-      <header className="mb-10">
-        <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Green Ledger — live demo</p>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-black dark:text-zinc-50">{org.legalName}</h1>
-        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-          Base year {org.baseYear} · {org.consolidationApproach.replaceAll("_", " ").toLowerCase()} consolidation
-        </p>
-      </header>
+    <>
+      <div className="mb-5">
+        <h1 className="text-xl font-semibold">Dashboard</h1>
+        <p className="mt-0.5 text-[13px] text-ink2">FY2026 progress across {sites.length} sites</p>
+      </div>
 
-      <section className="mb-10">
-        <h2 className="mb-3 text-sm font-medium text-zinc-500 dark:text-zinc-400">Sites</h2>
-        <div className="overflow-x-auto rounded-lg border border-black/10 dark:border-white/10">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-black/10 bg-black/[.02] text-left dark:border-white/10 dark:bg-white/[.03]">
-                <th className="px-4 py-2 font-medium">Site</th>
-                <th className="px-4 py-2 font-medium">Type</th>
-                <th className="px-4 py-2 font-medium">City</th>
-                <th className="px-4 py-2 font-medium">Status</th>
-                <th className="px-4 py-2 font-medium">Completeness</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sites.map((site) => {
-                const assignment = site.assignments[0];
-                return (
-                  <tr key={site.id} className="border-b border-black/5 last:border-0 dark:border-white/5">
-                    <td className="px-4 py-2">
-                      <span className="font-medium">{site.name}</span>{" "}
-                      <span className="text-zinc-400">({site.code})</span>
-                    </td>
-                    <td className="px-4 py-2 text-zinc-600 dark:text-zinc-400">
-                      {site.siteType.replaceAll("_", " ").toLowerCase()}
-                    </td>
-                    <td className="px-4 py-2 text-zinc-600 dark:text-zinc-400">{site.city}</td>
-                    <td className="px-4 py-2">
-                      {assignment ? (
-                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLE[assignment.status]}`}>
-                          {assignment.status.replaceAll("_", " ")}
-                        </span>
-                      ) : (
-                        <span className="text-zinc-400">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2 text-zinc-600 dark:text-zinc-400">
-                      {assignment ? `${assignment.completenessPct.toString()}%` : "—"}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </section>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Tile label="Sites reporting" value={`${reporting}`} unit={`of ${sites.length}`} />
+        <Tile label="Avg. completeness" value={avgCompleteness.toFixed(0)} unit="%" />
+        <Tile
+          label="Binding issues"
+          value={`${issues}`}
+          unit={`of ${bindingCount} bound`}
+          note={issues > 0 ? "needs attention in Factor Lab" : undefined}
+        />
+        <Tile label="Emissions calculated" value="0" unit="records" note="activity data not yet collected" />
+      </div>
 
-      <section>
-        <h2 className="mb-3 text-sm font-medium text-zinc-500 dark:text-zinc-400">
-          Factor binding health ({bindingCount} questions bound)
-        </h2>
-        <div className="flex flex-wrap gap-2">
-          {Object.entries(healthCounts)
-            .filter(([, count]) => count > 0)
-            .map(([health, count]) => (
-              <span key={health} className={`rounded-full px-3 py-1 text-xs font-medium ${HEALTH_STYLE[health]}`}>
-                {count} {health.replaceAll("_", " ").toLowerCase()}
-              </span>
-            ))}
-        </div>
-        <p className="mt-3 text-xs text-zinc-400">
-          Computed by <code className="font-mono">checkBindingHealth()</code> in <code className="font-mono">lib/factors</code> at seed time —
-          not hardcoded. A question cannot be published with a broken or ambiguous binding.
-        </p>
-      </section>
-    </main>
+      <h2 className="mb-2.5 mt-6 text-[14.5px] font-semibold">Progress by site</h2>
+      <div className="overflow-x-auto rounded-[11px] border border-border bg-surface">
+        <table className="w-full text-[13px]">
+          <thead>
+            <tr className="border-b border-grid text-left text-[11px] font-semibold uppercase tracking-wide text-muted">
+              <th className="px-4 py-2.5">Site</th>
+              <th className="px-4 py-2.5">Type</th>
+              <th className="px-4 py-2.5">City</th>
+              <th className="px-4 py-2.5">Status</th>
+              <th className="px-4 py-2.5">Completeness</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sites.map((site) => {
+              const assignment = site.assignments[0];
+              const pct = Number(assignment?.completenessPct ?? 0);
+              return (
+                <tr key={site.id} className="border-b border-grid last:border-0 hover:bg-track">
+                  <td className="px-4 py-2.5">
+                    <Link href="/sites" className="font-medium hover:underline">
+                      {site.name}
+                    </Link>{" "}
+                    <span className="text-muted">({site.code})</span>
+                  </td>
+                  <td className="px-4 py-2.5 text-ink2">{site.siteType.replaceAll("_", " ").toLowerCase()}</td>
+                  <td className="px-4 py-2.5 text-ink2">{site.city}</td>
+                  <td className="px-4 py-2.5">
+                    {assignment ? (
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLE[assignment.status]}`}>
+                        {assignment.status.replaceAll("_", " ")}
+                      </span>
+                    ) : (
+                      <span className="text-muted">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <div className="flex items-center gap-2">
+                      <div className="h-[7px] min-w-[52px] flex-1 overflow-hidden rounded-full bg-track">
+                        <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
+                      </div>
+                      <span className="text-ink2">{pct}%</span>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }
