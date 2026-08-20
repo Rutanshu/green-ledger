@@ -54,10 +54,70 @@ const FUEL_OR_MATERIAL_LABELS: Record<string, string> = {
   cleaning_services: 'Contract cleaning services',
 };
 
+/**
+ * Realistic follow-up work tied to real broken bindings and a real
+ * not-started site — not invented numbers, just Task rows pointing at
+ * entities that already exist. Idempotent: skips if any tasks exist.
+ */
+async function ensureTasks(orgId: string) {
+  const existingCount = await prisma.task.count({ where: { organizationId: orgId } });
+  if (existingCount > 0) {
+    console.log(`Tasks already seeded (${existingCount}). Skipping.`);
+    return;
+  }
+
+  const [notStartedSite, template] = await Promise.all([
+    prisma.site.findFirst({
+      where: { organizationId: orgId, assignments: { some: { status: 'NOT_STARTED' } } },
+    }),
+    prisma.questionnaireTemplate.findFirst({
+      where: { organizationId: orgId, status: 'PUBLISHED' },
+      include: { sections: { include: { questions: { include: { binding: true } } } } },
+    }),
+  ]);
+
+  const brokenBindings = (template?.sections ?? [])
+    .flatMap((s) => s.questions)
+    .filter((q) => q.binding && (q.binding.health === 'BROKEN' || q.binding.health === 'AMBIGUOUS'));
+
+  const tasks: Array<{ title: string; description: string; priority: number; entityType: string; entityId: string }> = [];
+
+  for (const q of brokenBindings) {
+    tasks.push({
+      title: `Fix broken binding: ${q.label}`,
+      description: q.binding!.healthMessage ?? 'No matching emission factor.',
+      priority: 1,
+      entityType: 'FactorBinding',
+      entityId: q.binding!.id,
+    });
+  }
+
+  if (notStartedSite) {
+    tasks.push({
+      title: `Chase ${notStartedSite.name} — data collection not started`,
+      description: 'No answers submitted yet for the current reporting period.',
+      priority: 2,
+      entityType: 'Site',
+      entityId: notStartedSite.id,
+    });
+  }
+
+  if (tasks.length === 0) {
+    console.log('No follow-up conditions found — nothing to seed for Tasks.');
+    return;
+  }
+
+  await prisma.task.createMany({
+    data: tasks.map((t) => ({ organizationId: orgId, status: 'OPEN' as const, ...t })),
+  });
+  console.log(`Seeded ${tasks.length} tasks.`);
+}
+
 async function main() {
   const existing = await prisma.organization.findFirst({ where: { legalName: 'Meridian Industries (Demo)' } });
   if (existing) {
-    console.log(`Organization "Meridian Industries (Demo)" already exists (${existing.id}). Skipping seed.`);
+    console.log(`Organization "Meridian Industries (Demo)" already exists (${existing.id}).`);
+    await ensureTasks(existing.id);
     return;
   }
 
@@ -416,6 +476,8 @@ async function main() {
 
     console.log(`  ${s.code}: ${status} (${completeness.satisfied}/${completeness.applicable} required, ${completeness.pct}%)`);
   }
+
+  await ensureTasks(org.id);
 
   console.log(`\nDone. Organization ${org.id} ("${org.legalName}") seeded.`);
 }

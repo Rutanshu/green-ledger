@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getDemoOrg } from "@/lib/demo-org";
+import { getCurrentOrg } from "@/lib/demo-org";
 import { orgScopedClient } from "@/lib/db/tenant";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +13,7 @@ const STATUS_STYLE: Record<string, string> = {
 };
 
 async function getDashboardData() {
-  const org = await getDemoOrg();
+  const org = await getCurrentOrg();
   if (!org) return null;
 
   const db = orgScopedClient(org.id);

@@ -1,12 +1,16 @@
-/**
- * Stand-in for auth/session org resolution, which doesn't exist yet.
- * Every page that needs "the current org" calls this instead of querying
- * rawPrisma directly, so there's one place to swap in real session lookup.
- */
 import { rawPrisma } from "@/lib/db/client";
+import { getSessionOrgId } from "@/lib/session";
 
-export function getDemoOrg() {
+/** Looked up by name — used only by the "Try the demo" login action. */
+export function findDemoOrg() {
   return rawPrisma.organization.findFirst({
     where: { legalName: "Meridian Industries (Demo)" },
   });
+}
+
+/** The org for the current session, or null if not signed in. */
+export async function getCurrentOrg() {
+  const orgId = await getSessionOrgId();
+  if (!orgId) return null;
+  return rawPrisma.organization.findUnique({ where: { id: orgId } });
 }

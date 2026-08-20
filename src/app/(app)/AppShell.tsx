@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
+import { signOut } from "../login/actions";
 
 const NAV_PRIMARY = [
   { href: "/how-it-works", label: "How it works", icon: "◎" },
@@ -76,6 +77,11 @@ export function AppShell({ orgName, children }: { orgName: string; children: Rea
           <span className="text-[13px] font-medium">{orgName}</span>
           <span className="text-[13px] text-ink2">FY2026</span>
           <div className="flex-1" />
+          <form action={signOut}>
+            <button type="submit" className="rounded-md px-2 py-1 text-xs text-ink2 hover:bg-track">
+              Sign out
+            </button>
+          </form>
           <span className="grid h-[26px] w-[26px] place-items-center rounded-full bg-accent text-[11px] font-bold text-white">
             GL
           </span>
