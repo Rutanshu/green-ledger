@@ -28,7 +28,7 @@ export default async function TasksPage() {
           No open tasks.
         </p>
       ) : (
-        <div className="mt-5 divide-y divide-grid rounded-[11px] border border-border bg-surface">
+        <div className="mt-5 divide-y divide-grid rounded-[11px] glass">
           {tasks.map((t) => (
             <div key={t.id} className="flex items-start justify-between gap-4 p-4">
               <div>

@@ -26,7 +26,7 @@ export default async function SitesPage() {
 
       <div className="mt-5 flex flex-col gap-4">
         {sites.map((site) => (
-          <div key={site.id} className="rounded-[11px] border border-border bg-surface">
+          <div key={site.id} className="rounded-[11px] glass">
             <div className="flex flex-wrap items-start justify-between gap-3 border-b border-grid p-4">
               <div>
                 <div className="font-semibold">

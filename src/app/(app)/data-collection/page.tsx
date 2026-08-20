@@ -38,7 +38,7 @@ export default async function DataCollectionPage() {
           const otherQuestions = allQuestions.filter((q) => q.allowedUnits.length === 0);
 
           return (
-            <div key={site.id} className="rounded-[11px] border border-border bg-surface">
+            <div key={site.id} className="rounded-[11px] glass">
               <div className="border-b border-grid p-4">
                 <div className="font-semibold">
                   {site.name} <span className="font-normal text-muted">({site.code})</span>

@@ -23,7 +23,7 @@ export default async function OrganisationPage() {
         publication means restating figures.
       </p>
 
-      <div className="mt-5 max-w-lg rounded-[11px] border border-border bg-surface">
+      <div className="mt-5 max-w-lg rounded-[11px] glass">
         <Row label="Legal name" value={org.legalName} />
         <Row label="Consolidation approach" value={org.consolidationApproach.replaceAll("_", " ").toLowerCase()} />
         <Row label="Base year" value={String(org.baseYear ?? "—")} />

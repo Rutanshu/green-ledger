@@ -54,7 +54,7 @@ export function AppShell({ orgName, children }: { orgName: string; children: Rea
 
   return (
     <div className="grid min-h-screen grid-cols-[232px_1fr]">
-      <aside className="sticky top-0 h-screen overflow-auto border-r border-border bg-surface p-3">
+      <aside className="glass sticky top-0 z-20 h-screen overflow-auto rounded-none border-y-0 border-l-0 p-3">
         <div className="flex items-center gap-2 px-2 pb-4 pt-1 text-[15px] font-semibold">
           <span className="grid h-[22px] w-[22px] place-items-center rounded-md bg-accent text-xs font-bold text-white">
             G
@@ -73,7 +73,7 @@ export function AppShell({ orgName, children }: { orgName: string; children: Rea
       </aside>
 
       <div className="flex min-w-0 flex-col">
-        <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-border bg-surface px-6 py-2.5">
+        <div className="glass sticky top-0 z-10 flex items-center gap-3 rounded-none border-x-0 border-t-0 px-6 py-2.5">
           <span className="text-[13px] font-medium">{orgName}</span>
           <span className="text-[13px] text-ink2">FY2026</span>
           <div className="flex-1" />

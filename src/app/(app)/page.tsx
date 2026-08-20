@@ -42,7 +42,7 @@ async function getDashboardData() {
 
 function Tile({ label, value, unit, note }: { label: string; value: string; unit?: string; note?: string }) {
   return (
-    <div className="rounded-[11px] border border-border bg-surface p-4">
+    <div className="rounded-[11px] glass p-4">
       <div className="text-[11.5px] font-semibold uppercase tracking-wide text-muted">{label}</div>
       <div className="mt-1 text-[26px] font-semibold tracking-tight">
         {value} {unit && <small className="text-sm font-medium text-ink2">{unit}</small>}
@@ -85,7 +85,7 @@ export default async function Home() {
       </div>
 
       <h2 className="mb-2.5 mt-6 text-[14.5px] font-semibold">Progress by site</h2>
-      <div className="overflow-x-auto rounded-[11px] border border-border bg-surface">
+      <div className="overflow-x-auto rounded-[11px] glass">
         <table className="w-full text-[13px]">
           <thead>
             <tr className="border-b border-grid text-left text-[11px] font-semibold uppercase tracking-wide text-muted">

@@ -34,7 +34,7 @@ export default async function BuilderPage() {
 
       <div className="mt-5 flex flex-col gap-4">
         {template.sections.map((section) => (
-          <div key={section.id} className="rounded-[11px] border border-border bg-surface">
+          <div key={section.id} className="rounded-[11px] glass">
             <div className="border-b border-grid p-4">
               <div className="font-semibold">{section.title}</div>
               <div className="mt-0.5 text-[13px] text-ink2">

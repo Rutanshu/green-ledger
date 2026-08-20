@@ -29,7 +29,7 @@ export default async function PeriodsPage() {
         A <span className="font-medium">LOCKED</span> period refuses edits — corrections go through restatement instead.
       </p>
 
-      <div className="mt-5 overflow-x-auto rounded-[11px] border border-border bg-surface">
+      <div className="mt-5 overflow-x-auto rounded-[11px] glass">
         <table className="w-full text-[13px]">
           <thead>
             <tr className="border-b border-grid text-left text-[11px] font-semibold uppercase tracking-wide text-muted">

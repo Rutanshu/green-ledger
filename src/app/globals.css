@@ -14,6 +14,13 @@
   --warn: #fab219;
   --crit: #d03b3b;
   --accent: #1baf7a;
+  --accent-sky: #2f8fd6;
+  --glass-bg: rgba(255, 255, 255, 0.55);
+  --glass-bg-strong: rgba(255, 255, 255, 0.72);
+  --glass-border: rgba(255, 255, 255, 0.55);
+  --glass-shadow: 0 8px 32px rgba(11, 11, 11, 0.08);
+  --ambient-1: rgba(27, 175, 122, 0.30);
+  --ambient-2: rgba(47, 143, 214, 0.24);
 }
 
 @theme inline {
@@ -29,6 +36,7 @@
   --color-warn: var(--warn);
   --color-crit: var(--crit);
   --color-accent: var(--accent);
+  --color-accent-sky: var(--accent-sky);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -45,6 +53,13 @@
     --border: rgba(255, 255, 255, 0.1);
     --track: #2c2c2a;
     --accent: #199e70;
+    --accent-sky: #4fa3e8;
+    --glass-bg: rgba(26, 26, 25, 0.55);
+    --glass-bg-strong: rgba(26, 26, 25, 0.75);
+    --glass-border: rgba(255, 255, 255, 0.1);
+    --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+    --ambient-1: rgba(25, 158, 112, 0.28);
+    --ambient-2: rgba(79, 163, 232, 0.16);
   }
 }
 
@@ -53,4 +68,44 @@ body {
   color: var(--ink);
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   font-size: 14px;
+}
+
+.ambient {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  overflow: hidden;
+  background:
+    radial-gradient(42rem 30rem at 6% 4%, var(--ambient-1), transparent 62%),
+    radial-gradient(38rem 34rem at 96% 8%, var(--ambient-2), transparent 62%),
+    radial-gradient(36rem 30rem at 70% 92%, var(--ambient-1), transparent 58%),
+    radial-gradient(30rem 26rem at 18% 96%, var(--ambient-2), transparent 58%);
+  filter: blur(6px);
+}
+
+.glass {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: blur(20px) saturate(1.5);
+  -webkit-backdrop-filter: blur(20px) saturate(1.5);
+}
+
+.glass-strong {
+  background: var(--glass-bg-strong);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: blur(24px) saturate(1.6);
+  -webkit-backdrop-filter: blur(24px) saturate(1.6);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .rise {
+    animation: rise 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+}
+@keyframes rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }

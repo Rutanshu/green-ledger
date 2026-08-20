@@ -15,7 +15,7 @@ export function SignInForm() {
           type="email"
           required
           placeholder="you@company.com"
-          className="w-full rounded-md border border-border bg-plane px-3 py-2 text-sm outline-none focus:border-accent"
+          className="w-full rounded-lg border border-border bg-white/40 px-3 py-2 text-sm outline-none backdrop-blur-sm transition focus:border-accent focus:bg-white/70 dark:bg-black/20 dark:focus:bg-black/40"
         />
       </div>
       <div>
@@ -25,7 +25,7 @@ export function SignInForm() {
           type="password"
           required
           placeholder="••••••••"
-          className="w-full rounded-md border border-border bg-plane px-3 py-2 text-sm outline-none focus:border-accent"
+          className="w-full rounded-lg border border-border bg-white/40 px-3 py-2 text-sm outline-none backdrop-blur-sm transition focus:border-accent focus:bg-white/70 dark:bg-black/20 dark:focus:bg-black/40"
         />
       </div>
       {state?.error && (
@@ -36,7 +36,7 @@ export function SignInForm() {
       <button
         type="submit"
         disabled={pending}
-        className="rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium hover:bg-track disabled:opacity-60"
+        className="rounded-lg border border-border bg-white/40 px-3 py-2 text-sm font-medium backdrop-blur-sm transition hover:bg-white/60 disabled:opacity-60 dark:bg-black/20 dark:hover:bg-black/40"
       >
         {pending ? "Signing in…" : "Sign in"}
       </button>

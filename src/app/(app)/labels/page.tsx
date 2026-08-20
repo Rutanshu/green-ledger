@@ -17,7 +17,7 @@ export default async function LabelsPage() {
         Renaming a code here can never change a number — every calculation still uses the code underneath.
       </p>
 
-      <div className="mt-5 overflow-x-auto rounded-[11px] border border-border bg-surface">
+      <div className="mt-5 overflow-x-auto rounded-[11px] glass">
         <table className="w-full text-[13px]">
           <thead>
             <tr className="border-b border-grid text-left text-[11px] font-semibold uppercase tracking-wide text-muted">

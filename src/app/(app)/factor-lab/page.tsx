@@ -40,7 +40,7 @@ export default async function FactorLabPage() {
       <p className="mt-0.5 text-[13px] text-ink2">Factor sets, and the health of every question's binding to them.</p>
 
       <h2 className="mb-2.5 mt-6 text-[14.5px] font-semibold">Bindings ({bindings.length})</h2>
-      <div className="overflow-x-auto rounded-[11px] border border-border bg-surface">
+      <div className="overflow-x-auto rounded-[11px] glass">
         <table className="w-full text-[13px]">
           <thead>
             <tr className="border-b border-grid text-left text-[11px] font-semibold uppercase tracking-wide text-muted">
@@ -83,7 +83,7 @@ export default async function FactorLabPage() {
       <h2 className="mb-2.5 mt-8 text-[14.5px] font-semibold">Factor sets</h2>
       <div className="flex flex-col gap-4">
         {factorSets.map((set) => (
-          <div key={set.id} className="rounded-[11px] border border-border bg-surface">
+          <div key={set.id} className="rounded-[11px] glass">
             <div className="border-b border-grid p-4">
               <div className="font-semibold">
                 {set.publisher} — {set.name} <span className="font-normal text-muted">{set.version}</span>

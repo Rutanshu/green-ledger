@@ -49,7 +49,7 @@ export default async function HowItWorksPage() {
 
       <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-4">
         {STEPS.map((s) => (
-          <div key={s.n} className="rounded-[11px] border border-border bg-surface p-4">
+          <div key={s.n} className="rounded-[11px] glass p-4">
             <div className="text-xs font-semibold text-muted">{s.n}</div>
             <div className="mt-1 font-semibold">{s.title}</div>
             <p className="mt-1 text-[13px] text-ink2">{s.body}</p>
@@ -61,7 +61,7 @@ export default async function HowItWorksPage() {
       {data && (
         <>
           <h2 className="mb-2.5 mt-8 text-[14.5px] font-semibold">This demo org's setup</h2>
-          <div className="divide-y divide-grid rounded-[11px] border border-border bg-surface">
+          <div className="divide-y divide-grid rounded-[11px] glass">
             <div className="flex items-start gap-3 p-4">
               <Check done />
               <div className="flex-1">
