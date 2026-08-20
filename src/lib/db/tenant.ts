@@ -32,18 +32,28 @@ const SHARED_OR_ORG_MODELS = new Set(['VocabularyEntry', 'EmissionFactorSet', 'F
  * where-injection before querying them directly.
  */
 
-const READ_OPS = new Set([
-  'findFirst', 'findFirstOrThrow', 'findUnique', 'findUniqueOrThrow',
-  'findMany', 'count', 'aggregate', 'groupBy',
+// findUnique/update/delete/upsert take a WhereUniqueInput: the unique field
+// (e.g. id) must sit at the top level, not nested inside AND — Prisma
+// rejects `{ AND: [{ id }, { organizationId }] }` as "needs at least one of
+// `id` arguments". findFirst/findMany/updateMany/deleteMany take a plain
+// WhereInput, where AND-wrapping is fine (and safest against key collisions).
+const UNIQUE_WHERE_OPS = new Set(['findUnique', 'findUniqueOrThrow', 'update', 'delete', 'upsert']);
+const FILTER_WHERE_OPS = new Set([
+  'findFirst', 'findFirstOrThrow', 'findMany', 'count', 'aggregate', 'groupBy', 'updateMany', 'deleteMany',
 ]);
-const WHERE_WRITE_OPS = new Set(['update', 'updateMany', 'delete', 'deleteMany']);
 const CREATE_OPS = new Set(['create', 'createMany', 'createManyAndReturn']);
 
-function scopeWhere(where: unknown, orgId: string, shared: boolean) {
-  const condition = shared
-    ? { OR: [{ organizationId: null }, { organizationId: orgId }] }
-    : { organizationId: orgId };
+function orgCondition(orgId: string, shared: boolean) {
+  return shared ? { OR: [{ organizationId: null }, { organizationId: orgId }] } : { organizationId: orgId };
+}
+
+function scopeFilterWhere(where: unknown, orgId: string, shared: boolean) {
+  const condition = orgCondition(orgId, shared);
   return where ? { AND: [where, condition] } : condition;
+}
+
+function scopeUniqueWhere(where: unknown, orgId: string, shared: boolean) {
+  return { ...(where as object), ...orgCondition(orgId, shared) };
 }
 
 export function orgScopedClient(orgId: string) {
@@ -60,8 +70,10 @@ export function orgScopedClient(orgId: string) {
           const scopedArgs = args as Record<string, unknown>;
 
           if (strict || shared) {
-            if (READ_OPS.has(operation) || WHERE_WRITE_OPS.has(operation)) {
-              scopedArgs.where = scopeWhere(scopedArgs.where, orgId, shared);
+            if (UNIQUE_WHERE_OPS.has(operation)) {
+              scopedArgs.where = scopeUniqueWhere(scopedArgs.where, orgId, shared);
+            } else if (FILTER_WHERE_OPS.has(operation)) {
+              scopedArgs.where = scopeFilterWhere(scopedArgs.where, orgId, shared);
             }
             if (CREATE_OPS.has(operation)) {
               scopedArgs.data = Array.isArray(scopedArgs.data)
@@ -69,7 +81,6 @@ export function orgScopedClient(orgId: string) {
                 : { ...(scopedArgs.data as object), organizationId: orgId };
             }
             if (operation === 'upsert') {
-              scopedArgs.where = scopeWhere(scopedArgs.where, orgId, shared);
               scopedArgs.create = { ...(scopedArgs.create as object), organizationId: orgId };
             }
           }

@@ -1,5 +1,6 @@
 import { getCurrentOrg } from "@/lib/demo-org";
 import { orgScopedClient } from "@/lib/db/tenant";
+import { retestBinding } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +49,7 @@ export default async function FactorLabPage() {
               <th className="px-4 py-2.5">Fuel / material</th>
               <th className="px-4 py-2.5">Region strategy</th>
               <th className="px-4 py-2.5">Health</th>
+              <th className="px-4 py-2.5"></th>
             </tr>
           </thead>
           <tbody>
@@ -64,6 +66,13 @@ export default async function FactorLabPage() {
                   >
                     {binding.health.replaceAll("_", " ")}
                   </span>
+                </td>
+                <td className="px-4 py-2.5">
+                  <form action={retestBinding.bind(null, binding.id)}>
+                    <button type="submit" className="rounded-md border border-border px-2 py-1 text-xs hover:bg-track">
+                      Test binding
+                    </button>
+                  </form>
                 </td>
               </tr>
             ))}

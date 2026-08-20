@@ -1,5 +1,6 @@
 import { getCurrentOrg } from "@/lib/demo-org";
 import { orgScopedClient } from "@/lib/db/tenant";
+import { setTaskStatus } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -35,9 +36,16 @@ export default async function TasksPage() {
                 {t.description && <div className="mt-0.5 text-xs text-ink2">{t.description}</div>}
                 <div className="mt-1 text-xs text-muted">{t.entityType} · {t.status}</div>
               </div>
-              <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${PRIORITY_STYLE[t.priority] ?? PRIORITY_STYLE[3]}`}>
-                {PRIORITY_LABEL[t.priority] ?? "Low"}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${PRIORITY_STYLE[t.priority] ?? PRIORITY_STYLE[3]}`}>
+                  {PRIORITY_LABEL[t.priority] ?? "Low"}
+                </span>
+                <form action={setTaskStatus.bind(null, t.id, t.status === "DONE" ? "OPEN" : "DONE")}>
+                  <button type="submit" className="whitespace-nowrap rounded-md border border-border px-2 py-1 text-xs hover:bg-track">
+                    {t.status === "DONE" ? "Reopen" : "Mark done"}
+                  </button>
+                </form>
+              </div>
             </div>
           ))}
         </div>

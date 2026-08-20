@@ -1,5 +1,6 @@
 import { getCurrentOrg } from "@/lib/demo-org";
 import { orgScopedClient } from "@/lib/db/tenant";
+import { AnswerRow } from "./AnswerRow";
 
 export const dynamic = "force-dynamic";
 
@@ -24,9 +25,8 @@ export default async function DataCollectionPage() {
     <>
       <h1 className="text-xl font-semibold">Data Collection</h1>
       <p className="mt-0.5 text-[13px] text-ink2">
-        What&apos;s been answered per site. These answers were written by the seed script directly — nobody has
-        typed them through this screen, because the form itself (with <code className="font-mono">visible_if</code>{" "}
-        filtering and autosave) isn&apos;t built yet. This is the read side only.
+        Live — edit a value and save. Completeness recalculates immediately via the same{" "}
+        <code className="font-mono">computeCompleteness()</code> used everywhere else.
       </p>
 
       <div className="mt-5 flex flex-col gap-4">
@@ -34,6 +34,8 @@ export default async function DataCollectionPage() {
           const assignment = site.assignments[0];
           const allQuestions = assignment?.template.sections.flatMap((s) => s.questions) ?? [];
           const answersByQuestion = new Map(assignment?.answers.map((a) => [a.questionId, a]) ?? []);
+          const numericQuestions = allQuestions.filter((q) => q.allowedUnits.length > 0);
+          const otherQuestions = allQuestions.filter((q) => q.allowedUnits.length === 0);
 
           return (
             <div key={site.id} className="rounded-[11px] border border-border bg-surface">
@@ -50,31 +52,37 @@ export default async function DataCollectionPage() {
               {allQuestions.length === 0 ? (
                 <p className="p-4 text-[13px] text-muted">No assignment for this site.</p>
               ) : (
-                <table className="w-full text-[13px]">
-                  <thead>
-                    <tr className="text-left text-[11px] font-semibold uppercase tracking-wide text-muted">
-                      <th className="px-4 py-2">Question</th>
-                      <th className="px-4 py-2">Answer</th>
-                      <th className="px-4 py-2">Quality</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {allQuestions.map((q) => {
-                      const a = answersByQuestion.get(q.id);
-                      return (
-                        <tr key={q.id} className="border-t border-grid">
-                          <td className="px-4 py-2 font-medium">{q.code}</td>
-                          <td className="px-4 py-2 text-ink2">
-                            {a ? `${a.valueNumeric?.toString() ?? a.valueText ?? "—"} ${a.unit ?? ""}` : (
-                              <span className="text-muted">not answered</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-2 text-ink2">{a?.dataQuality ?? "—"}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                <>
+                  <table className="w-full text-[13px]">
+                    <thead>
+                      <tr className="text-left text-[11px] font-semibold uppercase tracking-wide text-muted">
+                        <th className="px-4 py-2">Question</th>
+                        <th className="px-4 py-2">Answer</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {numericQuestions.map((q) => {
+                        const a = answersByQuestion.get(q.id);
+                        return (
+                          <AnswerRow
+                            key={q.id}
+                            assignmentId={assignment!.id}
+                            questionId={q.id}
+                            code={q.code}
+                            allowedUnits={q.allowedUnits}
+                            existing={a ? { value: a.valueNumeric?.toString() ?? "", unit: a.unit ?? "", quality: a.dataQuality ?? "ESTIMATED" } : null}
+                          />
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  {otherQuestions.length > 0 && (
+                    <div className="border-t border-grid p-4 text-xs text-muted">
+                      {otherQuestions.length} boolean/conditional question(s) not editable in this demo (
+                      {otherQuestions.map((q) => q.code).join(", ")}).
+                    </div>
+                  )}
+                </>
               )}
             </div>
           );
