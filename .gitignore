@@ -44,3 +44,6 @@ next-env.d.ts
 .env
 .env.local
 src/generated/
+
+# Neon CLI workspace link (project/branch IDs, no secrets, but local-machine-specific)
+.neon
