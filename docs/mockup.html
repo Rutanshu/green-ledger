@@ -1,0 +1,999 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GHG Platform — UI Mockup</title>
+<style>
+:root{
+  --plane:#f9f9f7; --surface:#fcfcfb; --ink:#0b0b0b; --ink2:#52514e; --muted:#898781;
+  --grid:#e1e0d9; --axis:#c3c2b7; --border:rgba(11,11,11,.10);
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --s5:#e87ba4; --s6:#008300; --s7:#4a3aa7; --s8:#e34948;
+  --good:#0ca30c; --warn:#fab219; --serious:#ec835a; --crit:#d03b3b;
+  --track:#e8e7e1;
+}
+html[data-theme="dark"]{
+  --plane:#0d0d0d; --surface:#1a1a19; --ink:#fff; --ink2:#c3c2b7; --muted:#898781;
+  --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,.10);
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#008300; --s7:#9085e9; --s8:#e66767;
+  --track:#2c2c2a;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--plane);color:var(--ink);
+  font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;}
+a{color:inherit}
+.app{display:grid;grid-template-columns:232px 1fr;min-height:100vh}
+/* ---------- sidebar ---------- */
+.side{background:var(--surface);border-right:1px solid var(--border);padding:16px 12px;position:sticky;top:0;height:100vh;overflow:auto}
+.brand{display:flex;align-items:center;gap:9px;font-weight:650;font-size:15px;padding:4px 8px 16px}
+.brand .dot{width:22px;height:22px;border-radius:6px;background:var(--s3);display:grid;place-items:center;color:#fff;font-size:12px;font-weight:700}
+.nav{display:flex;flex-direction:column;gap:1px}
+.nav button{all:unset;display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:7px;cursor:pointer;color:var(--ink2);font-size:13.5px}
+.nav button:hover{background:var(--track)}
+.nav button[aria-current="true"]{background:var(--track);color:var(--ink);font-weight:600}
+.nav .ico{width:16px;text-align:center;opacity:.85}
+.badge{margin-left:auto;background:var(--crit);color:#fff;font-size:10.5px;font-weight:700;border-radius:9px;padding:1px 6px}
+.navlabel{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:16px 10px 6px;font-weight:600}
+/* ---------- topbar ---------- */
+.main{display:flex;flex-direction:column;min-width:0}
+.top{display:flex;align-items:center;gap:12px;padding:11px 22px;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:5}
+.sel{border:1px solid var(--border);background:var(--surface);color:var(--ink);border-radius:7px;padding:5px 10px;font:inherit;font-size:13px}
+.spacer{flex:1}
+.avatar{width:26px;height:26px;border-radius:50%;background:var(--s7);color:#fff;display:grid;place-items:center;font-size:11px;font-weight:700}
+.iconbtn{all:unset;cursor:pointer;padding:5px 8px;border-radius:7px;color:var(--ink2)}
+.iconbtn:hover{background:var(--track)}
+.content{padding:22px;max-width:1240px}
+h1{font-size:20px;margin:0 0 3px;font-weight:650}
+.sub{color:var(--ink2);font-size:13px;margin:0 0 20px}
+h2{font-size:14.5px;margin:26px 0 11px;font-weight:650}
+/* ---------- cards / tiles ---------- */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:16px}
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.tile .lab{color:var(--muted);font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;font-weight:600}
+.tile .val{font-size:26px;font-weight:650;margin:5px 0 2px;letter-spacing:-.02em}
+.tile .val small{font-size:14px;font-weight:500;color:var(--ink2)}
+.delta{font-size:12px;color:var(--ink2);display:flex;align-items:center;gap:5px}
+.delta .up{color:var(--crit);font-weight:600}
+.delta .dn{color:var(--good);font-weight:600}
+/* ---------- table ---------- */
+table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+th{text-align:left;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.05em;font-weight:600;padding:0 10px 8px;border-bottom:1px solid var(--grid)}
+td{padding:11px 10px;border-bottom:1px solid var(--grid)}
+tbody tr:hover{background:var(--track)}
+tbody tr{cursor:pointer}
+.num{text-align:right}
+/* ---------- bar / meter ---------- */
+.meter{display:flex;align-items:center;gap:8px}
+.bar{flex:1;height:7px;background:var(--track);border-radius:4px;overflow:hidden;min-width:52px}
+.bar i{display:block;height:100%;background:var(--s1);border-radius:4px}
+.pct{font-size:12px;color:var(--ink2);width:34px;text-align:right;font-variant-numeric:tabular-nums}
+/* ---------- pills ---------- */
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:20px;border:1px solid var(--border);color:var(--ink2);white-space:nowrap}
+.pill.ok{color:var(--good)} .pill.warn{color:#8a5c00} .pill.crit{color:var(--crit)} .pill.info{color:var(--s1)}
+html[data-theme="dark"] .pill.warn{color:var(--warn)}
+.chip{display:inline-block;font-size:11px;padding:2px 7px;border-radius:5px;background:var(--track);color:var(--ink2)}
+/* ---------- charts ---------- */
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.chart-t{font-size:13.5px;font-weight:650;margin:0 0 2px}
+.chart-s{font-size:12px;color:var(--muted);margin:0 0 14px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--ink2);margin-top:12px}
+.legend span{display:flex;align-items:center;gap:6px}
+.sw{width:10px;height:10px;border-radius:3px;display:inline-block}
+/* stacked column chart */
+.cols{display:flex;align-items:flex-end;gap:20px;height:190px;padding-left:42px;position:relative;border-bottom:1px solid var(--axis)}
+.gl{position:absolute;left:42px;right:0;border-top:1px solid var(--grid);font-size:10.5px;color:var(--muted)}
+.gl b{position:absolute;left:-42px;top:-7px;font-weight:400;font-variant-numeric:tabular-nums}
+.col{flex:1;display:flex;flex-direction:column;justify-content:flex-end;gap:2px;position:relative;z-index:1}
+.col i{display:block;border-radius:1px}
+.col i:first-child{border-radius:4px 4px 1px 1px}
+.xlab{display:flex;gap:20px;padding-left:42px;margin-top:7px}
+.xlab span{flex:1;text-align:center;font-size:11.5px;color:var(--muted)}
+/* horizontal bars */
+.hbars{display:flex;flex-direction:column;gap:9px}
+.hb{display:grid;grid-template-columns:158px 1fr 62px;align-items:center;gap:10px;font-size:12.5px}
+.hb .track{height:14px;background:var(--track);border-radius:4px;overflow:hidden}
+.hb .track i{display:block;height:100%;border-radius:0 4px 4px 0;background:var(--s1)}
+.hb .v{text-align:right;color:var(--ink2);font-variant-numeric:tabular-nums}
+.hb .n{color:var(--ink2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* quality strip */
+.strip{display:flex;height:16px;border-radius:5px;overflow:hidden;gap:2px;background:var(--surface)}
+.strip i{display:block}
+/* ---------- tabs ---------- */
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--border);margin:0 0 18px}
+.tabs button{all:unset;cursor:pointer;padding:9px 14px;font-size:13.5px;color:var(--ink2);border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs button[aria-current="true"]{color:var(--ink);font-weight:600;border-bottom-color:var(--s1)}
+.tabs button:hover{color:var(--ink)}
+/* ---------- forms ---------- */
+.fgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px 20px}
+.f label{display:block;font-size:11.5px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px}
+.f input,.f select,.f textarea{width:100%;border:1px solid var(--border);background:var(--surface);color:var(--ink);border-radius:7px;padding:7px 10px;font:inherit;font-size:13.5px}
+.f input:focus,.f select:focus{outline:2px solid var(--s1);outline-offset:-1px}
+.req{color:var(--crit)}
+.hint{font-size:11.5px;color:var(--muted);margin-top:4px}
+/* ---------- questionnaire ---------- */
+.q3{display:grid;grid-template-columns:210px 1fr 250px;gap:16px;align-items:start}
+.tree{font-size:13px}
+.tree .grp{font-weight:650;padding:9px 8px 5px;color:var(--ink)}
+.tree button{all:unset;cursor:pointer;display:flex;align-items:center;gap:8px;padding:6px 9px;border-radius:7px;color:var(--ink2);width:calc(100% - 18px)}
+.tree button:hover{background:var(--track)}
+.tree button[aria-current="true"]{background:var(--track);color:var(--ink);font-weight:600}
+.ring{width:15px;height:15px;border-radius:50%;flex:none;
+  background:conic-gradient(var(--s1) calc(var(--p)*1%),var(--track) 0)}
+.ring.done{background:var(--good)}
+.qcard{border:1px solid var(--border);border-radius:10px;padding:15px;margin-bottom:11px;background:var(--surface)}
+.qcard.answered{border-left:3px solid var(--good)}
+.qcard.flagged{border-left:3px solid var(--warn)}
+.qcode{font-size:11px;color:var(--muted);font-weight:600;letter-spacing:.04em}
+.qlab{font-size:14px;font-weight:600;margin:4px 0 3px;line-height:1.45}
+.qhelp{font-size:12.5px;color:var(--ink2);margin-bottom:11px}
+.qrow{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+.qrow input{width:140px}
+.qrow select{width:auto;min-width:120px}
+.qfoot{display:flex;gap:14px;align-items:center;margin-top:11px;padding-top:11px;border-top:1px solid var(--grid);font-size:12px;color:var(--ink2);flex-wrap:wrap}
+.result{margin-left:auto;font-weight:650;color:var(--ink);font-variant-numeric:tabular-nums}
+.linkbtn{all:unset;cursor:pointer;color:var(--s1);font-size:12px;font-weight:600}
+.linkbtn:hover{text-decoration:underline}
+.maths{margin-top:11px;background:var(--plane);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:12.5px;display:none}
+.maths.open{display:block}
+.maths table{font-size:12.5px}
+.maths td{padding:3px 8px;border:0}
+.maths td:first-child{color:var(--muted);width:150px}
+.maths .eq{border-top:1px solid var(--grid)!important;font-weight:650}
+.rail .rl{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600;margin:0 0 8px}
+.rail .blk{margin-bottom:20px}
+.att{display:flex;align-items:center;gap:8px;font-size:12.5px;padding:6px 8px;border:1px solid var(--border);border-radius:7px;margin-bottom:6px;color:var(--ink2)}
+.cmt{font-size:12.5px;border-left:2px solid var(--grid);padding:2px 0 2px 10px;margin-bottom:11px;color:var(--ink2)}
+.cmt b{color:var(--ink);font-weight:600;display:block;font-size:12px}
+/* ---------- builder ---------- */
+.b3{display:grid;grid-template-columns:200px 1fr 290px;gap:16px;align-items:start}
+.libitem{padding:7px 9px;border:1px solid var(--border);border-radius:7px;margin-bottom:6px;font-size:12.5px;color:var(--ink2);cursor:grab;display:flex;gap:7px;align-items:center}
+.libitem:hover{background:var(--track);color:var(--ink)}
+.canvas .sec{border:1px solid var(--border);border-radius:9px;margin-bottom:11px;overflow:hidden}
+.canvas .sechd{background:var(--track);padding:8px 12px;font-size:12.5px;font-weight:650;display:flex;align-items:center;gap:8px}
+.canvas .qi{padding:9px 12px;border-top:1px solid var(--grid);font-size:13px;display:flex;align-items:center;gap:9px;cursor:pointer}
+.canvas .qi:hover{background:var(--track)}
+.canvas .qi[aria-current="true"]{background:var(--track);box-shadow:inset 3px 0 0 var(--s1)}
+.drag{color:var(--muted);cursor:grab}
+.insp .div{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--s1);font-weight:700;margin:20px 0 11px;display:flex;align-items:center;gap:8px}
+.insp .div::after{content:"";flex:1;height:1px;background:var(--border)}
+.insp .f{margin-bottom:11px}
+.btn{all:unset;cursor:pointer;background:var(--s1);color:#fff;padding:8px 14px;border-radius:7px;font-size:13px;font-weight:600;text-align:center}
+.btn:hover{filter:brightness(1.08)}
+.btn.ghost{background:transparent;color:var(--ink2);border:1px solid var(--border)}
+.btn.ghost:hover{background:var(--track);color:var(--ink)}
+.testpanel{margin-top:12px;border:1px solid var(--good);border-radius:8px;padding:11px;font-size:12px;background:var(--plane)}
+.testpanel.bad{border-color:var(--crit)}
+.testpanel .hd{font-weight:700;margin-bottom:7px;display:flex;gap:6px;align-items:center}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px}
+/* ---------- misc ---------- */
+.banner{display:flex;align-items:center;gap:9px;background:#fff8e6;border:1px solid var(--warn);color:#7a5200;padding:9px 14px;border-radius:9px;font-size:12.5px;margin-bottom:18px}
+html[data-theme="dark"] .banner{background:#2a2312;color:var(--warn)}
+
+/* ---------- flow diagram ---------- */
+.flow{display:flex;align-items:stretch;gap:10px;flex-wrap:wrap}
+.fb{flex:1;min-width:180px;background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:15px;position:relative;transition:.15s}
+.fb:hover{border-color:var(--s1);box-shadow:0 0 0 3px rgba(42,120,214,.10)}
+.fb .fn{width:20px;height:20px;border-radius:50%;background:var(--s1);color:#fff;display:grid;place-items:center;font-size:11px;font-weight:700;margin-bottom:9px}
+.fb b{display:block;font-size:13.5px;margin-bottom:5px}
+.fb p{font-size:12.5px;color:var(--ink2);margin:0 0 10px;line-height:1.5}
+.fb .fl{font-size:11px;color:var(--s1);font-weight:650}
+.farr{display:grid;place-items:center;font-size:11px;color:var(--muted);font-weight:600;padding:0 2px;white-space:nowrap}
+.farr::before{content:"▸";display:block;font-size:16px;color:var(--axis);text-align:center}
+/* ---------- checklist ---------- */
+.pen{color:var(--muted);font-size:11px;cursor:pointer;opacity:.55;font-weight:400}
+.pen:hover{opacity:1;color:var(--s1)}
+.yours{font-size:9.5px;color:var(--s1);border:1px solid var(--s1);border-radius:4px;padding:0 4px;margin-left:5px;font-weight:700;letter-spacing:.03em;vertical-align:1px}
+.chk{display:flex;gap:12px;align-items:flex-start;padding:15px 4px;border-bottom:1px solid var(--grid)}
+.chk:last-child{border-bottom:0}
+.chk .ci{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:12px;flex:none;border:1px solid var(--axis);color:var(--muted);margin-top:1px}
+.chk.done .ci{background:var(--good);border-color:var(--good);color:#fff}
+.chk.part .ci{border-color:var(--s1);color:var(--s1)}
+.chk.warn .ci{border-color:var(--warn);color:#8a5c00}
+html[data-theme="dark"] .chk.warn .ci{color:var(--warn)}
+.chk b{font-size:13.5px;display:block;margin-bottom:3px}
+.chk p{font-size:12.5px;color:var(--ink2);margin:0;line-height:1.55}
+.chk > div{flex:1}
+.chk > .linkbtn{margin-top:2px;white-space:nowrap}
+.chk.blocked{opacity:.72}
+.blockmsg{font-size:11.5px;color:var(--muted);margin-top:7px;border-left:2px solid var(--axis);padding-left:9px}
+/* ---------- walkthrough ---------- */
+.walk{display:flex;flex-direction:column}
+.ws{display:flex;gap:12px;padding:11px 0;border-bottom:1px solid var(--grid)}
+.ws:last-child{border-bottom:0}
+.ws .wn{width:20px;height:20px;border-radius:50%;background:var(--track);color:var(--ink2);display:grid;place-items:center;font-size:11px;font-weight:700;flex:none;margin-top:2px}
+.ws b{font-size:13px;display:block;margin-bottom:3px}
+.ws p{font-size:12.5px;color:var(--ink2);margin:0;line-height:1.6}
+/* ---------- concept cards ---------- */
+.cc{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:12px 14px;margin-bottom:8px}
+.cc summary{cursor:pointer;font-size:13.5px;font-weight:600;list-style:none}
+.cc summary::-webkit-details-marker{display:none}
+.cc summary::before{content:"▸ ";color:var(--muted)}
+.cc[open] summary::before{content:"▾ "}
+.cc p{font-size:12.5px;color:var(--ink2);line-height:1.6;margin:10px 0 0}
+/* ---------- label ladder ---------- */
+.ladder{display:flex;flex-direction:column;gap:2px;margin-top:4px}
+.lr{display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--ink2);padding:7px 10px;border-radius:7px;background:var(--plane)}
+.lr .ln{width:17px;height:17px;border-radius:50%;background:var(--track);display:grid;place-items:center;font-size:10.5px;font-weight:700;color:var(--ink2);flex:none}
+.lr.on{background:rgba(42,120,214,.10);color:var(--ink);font-weight:600}
+.lr.on .ln{background:var(--s1);color:#fff}
+.lr.sys{opacity:.7}
+.lr .lv{color:var(--muted);font-weight:400}
+.screen{display:none}
+.screen.on{display:block}
+.sitetab,.labtab{display:none}
+.sitetab.on,.labtab.on{display:block}
+.hd{display:flex;align-items:flex-start;gap:14px;margin-bottom:6px}
+.hd .btn{margin-left:auto}
+.note{background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--s1);border-radius:8px;padding:12px 14px;font-size:12.5px;color:var(--ink2);margin:18px 0}
+.note b{color:var(--ink)}
+@media(max-width:1100px){.q3,.b3{grid-template-columns:1fr}.tiles{grid-template-columns:repeat(2,1fr)}.two{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="app">
+
+<aside class="side">
+  <div class="brand"><span class="dot">G</span> Green Ledger</div>
+  <div class="nav" id="nav">
+    <button data-s="start"><span class="ico">◎</span> How it works</button>
+    <button data-s="dash" aria-current="true"><span class="ico">▦</span> Dashboard</button>
+    <button data-s="site"><span class="ico">▤</span> Sites</button>
+    <button data-s="quest"><span class="ico">✎</span> Data Collection</button>
+    <button data-s="lab"><span class="ico">⚗</span> Factor Lab <span class="badge">3</span></button>
+    <button data-s="build"><span class="ico">⚙</span> Builder</button>
+  </div>
+  <div class="navlabel">Workflow</div>
+  <div class="nav">
+    <button><span class="ico">☑</span> Tasks <span class="badge">4</span></button>
+    <button><span class="ico">🗎</span> Documents</button>
+    <button><span class="ico">▧</span> Reports</button>
+  </div>
+  <div class="navlabel">Admin</div>
+  <div class="nav">
+    <button><span class="ico">◱</span> Organisation</button>
+    <button><span class="ico">◔</span> Periods</button>
+    <button data-s="labels"><span class="ico">🏷</span> Labels</button>
+    <button><span class="ico">☖</span> Users &amp; roles</button>
+  </div>
+</aside>
+
+<div class="main">
+  <div class="top">
+    <select class="sel"><option>Meridian Industries</option></select>
+    <select class="sel"><option>FY2026 · Apr 2026 – Mar 2027</option><option>FY2025</option></select>
+    <span class="pill info">◔ Open</span>
+    <div class="spacer"></div>
+    <button class="iconbtn" onclick="tog()">◐ Theme</button>
+    <button class="iconbtn">🔔</button>
+    <span class="avatar">RO</span>
+  </div>
+  <div class="content" id="content">
+<!-- ============ DASHBOARD ============ -->
+<section class="screen on" id="s-dash">
+  <div class="hd"><div>
+    <h1>Dashboard</h1>
+    <p class="sub">FY2026 progress across 11 sites · data collection closes 31 May 2027</p>
+  </div><button class="btn">Export audit pack</button></div>
+
+  <div class="tiles">
+    <div class="card tile"><div class="lab">Total emissions</div><div class="val">12,480 <small>tCO₂e</small></div>
+      <div class="delta"><span class="up">▲ 4.2%</span> higher vs FY2025</div></div>
+    <div class="card tile"><div class="lab">Data completeness</div><div class="val">68<small>%</small></div>
+      <div class="delta"><span class="dn">▲ 12 pts</span> this month</div></div>
+    <div class="card tile"><div class="lab">Sites reporting</div><div class="val">7 <small>of 11</small></div>
+      <div class="delta">2 awaiting review</div></div>
+    <div class="card tile"><div class="lab">Overdue tasks</div><div class="val">4</div>
+      <div class="delta"><span class="up">2</span> past due 7+ days</div></div>
+  </div>
+
+  <h2>Progress by site</h2>
+  <div class="card" style="padding:16px 6px 6px">
+    <table>
+      <thead><tr><th>Site</th><th>Type</th><th>Owner</th><th>Scope 1</th><th>Scope 2</th><th>Scope 3</th><th>Overall</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr onclick="go('site')">
+          <td><b>Northgate Plant</b><div class="hint">MI-NG-01 · Leeds, UK</div></td><td>Manufacturing</td><td>R. Okafor</td>
+          <td><div class="meter"><div class="bar"><i style="width:88%"></i></div><span class="pct">88%</span></div></td>
+          <td><div class="meter"><div class="bar"><i style="width:100%"></i></div><span class="pct">100%</span></div></td>
+          <td><div class="meter"><div class="bar"><i style="width:34%"></i></div><span class="pct">34%</span></div></td>
+          <td><b>71%</b></td><td><span class="pill info">◐ In review</span></td></tr>
+        <tr onclick="go('quest')">
+          <td><b>Riverside Office</b><div class="hint">MI-RO-02 · Leeds, UK</div></td><td>Office</td><td>A. Lindqvist</td>
+          <td><div class="meter"><div class="bar"><i style="width:45%"></i></div><span class="pct">45%</span></div></td>
+          <td><div class="meter"><div class="bar"><i style="width:72%"></i></div><span class="pct">72%</span></div></td>
+          <td><div class="meter"><div class="bar"><i style="width:0%"></i></div><span class="pct">0%</span></div></td>
+          <td><b>38%</b></td><td><span class="pill warn">◑ In progress</span></td></tr>
+        <tr>
+          <td><b>Ashford Data Centre</b><div class="hint">MI-AD-04 · Ashford, UK</div></td><td>Data centre</td><td>M. Ferreira</td>
+          <td><div class="meter"><div class="bar"><i style="width:100%"></i></div><span class="pct">100%</span></div></td>
+          <td><div class="meter"><div class="bar"><i style="width:100%"></i></div><span class="pct">100%</span></div></td>
+          <td><div class="meter"><div class="bar"><i style="width:61%"></i></div><span class="pct">61%</span></div></td>
+          <td><b>87%</b></td><td><span class="pill ok">✓ Approved</span></td></tr>
+        <tr>
+          <td><b>Central Warehouse</b><div class="hint">MI-CW-07 · Rugby, UK</div></td><td>Warehouse</td><td><span class="hint">unassigned</span></td>
+          <td><div class="meter"><div class="bar"><i style="width:0%"></i></div><span class="pct">0%</span></div></td>
+          <td><div class="meter"><div class="bar"><i style="width:0%"></i></div><span class="pct">0%</span></div></td>
+          <td><div class="meter"><div class="bar"><i style="width:0%"></i></div><span class="pct">0%</span></div></td>
+          <td><b>0%</b></td><td><span class="pill crit">⚠ Not started</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="note"><b>Why worst-first:</b> the table sorts by completeness ascending. The dashboard's job is to tell you who to chase, not to congratulate the sites that already finished. Hovering a row reveals “Send reminder”, which creates a Task.</div>
+
+  <div class="two">
+    <div class="card">
+      <p class="chart-t">Emissions by scope</p><p class="chart-s">tCO₂e · last 5 reporting periods</p>
+      <div class="cols">
+        <div class="gl" style="bottom:190px"><b>15k</b></div>
+        <div class="gl" style="bottom:127px"><b>10k</b></div>
+        <div class="gl" style="bottom:63px"><b>5k</b></div>
+        <div class="col"><i style="height:52px;background:var(--s3)"></i><i style="height:34px;background:var(--s2)"></i><i style="height:26px;background:var(--s1)"></i></div>
+        <div class="col"><i style="height:58px;background:var(--s3)"></i><i style="height:36px;background:var(--s2)"></i><i style="height:27px;background:var(--s1)"></i></div>
+        <div class="col"><i style="height:66px;background:var(--s3)"></i><i style="height:35px;background:var(--s2)"></i><i style="height:28px;background:var(--s1)"></i></div>
+        <div class="col"><i style="height:71px;background:var(--s3)"></i><i style="height:37px;background:var(--s2)"></i><i style="height:30px;background:var(--s1)"></i></div>
+        <div class="col"><i style="height:82px;background:var(--s3)"></i><i style="height:38px;background:var(--s2)"></i><i style="height:31px;background:var(--s1)"></i></div>
+      </div>
+      <div class="xlab"><span>FY22</span><span>FY23</span><span>FY24</span><span>FY25</span><span>FY26</span></div>
+      <div class="legend">
+        <span><i class="sw" style="background:var(--s1)"></i> Scope 1</span>
+        <span><i class="sw" style="background:var(--s2)"></i> Scope 2 (market)</span>
+        <span><i class="sw" style="background:var(--s3)"></i> Scope 3</span>
+        <span style="margin-left:auto"><button class="linkbtn">View as table</button></span>
+      </div>
+    </div>
+    <div class="card">
+      <p class="chart-t">Top emission sources</p><p class="chart-s">tCO₂e · FY2026 to date</p>
+      <div class="hbars">
+        <div class="hb"><span class="n">Purchased goods (3.1)</span><span class="track"><i style="width:100%"></i></span><span class="v">4,120</span></div>
+        <div class="hb"><span class="n">Grid electricity</span><span class="track"><i style="width:71%"></i></span><span class="v">2,930</span></div>
+        <div class="hb"><span class="n">Waste to landfill (3.5)</span><span class="track"><i style="width:41%"></i></span><span class="v">1,690</span></div>
+        <div class="hb"><span class="n">Employee commuting</span><span class="track"><i style="width:29%"></i></span><span class="v">1,205</span></div>
+        <div class="hb"><span class="n">Refrigerants (R-410A)</span><span class="track"><i style="width:22%"></i></span><span class="v">   910</span></div>
+        <div class="hb"><span class="n">Upstream freight (3.4)</span><span class="track"><i style="width:18%"></i></span><span class="v">   742</span></div>
+        <div class="hb"><span class="n">Diesel generators</span><span class="track"><i style="width:15%"></i></span><span class="v">   611</span></div>
+        <div class="hb"><span class="n">Forklift fleet</span><span class="track"><i style="width:9%"></i></span><span class="v">   380</span></div>
+      </div>
+      <div class="legend"><span>Sorted descending · direct-labelled · single hue (magnitude, not identity)</span></div>
+    </div>
+  </div>
+
+  <div class="two" style="margin-top:12px">
+    <div class="card">
+      <p class="chart-t">Scope 2 — both bases</p><p class="chart-s">ESRS E1-6 requires disclosing both. The UI never lets you pick one.</p>
+      <div style="display:flex;gap:34px;margin-top:6px">
+        <div><div class="lab" style="color:var(--muted);font-size:11.5px;font-weight:600">Location-based</div><div style="font-size:24px;font-weight:650">3,410 <small style="font-size:13px;color:var(--ink2)">tCO₂e</small></div></div>
+        <div><div class="lab" style="color:var(--muted);font-size:11.5px;font-weight:600">Market-based</div><div style="font-size:24px;font-weight:650">2,930 <small style="font-size:13px;color:var(--ink2)">tCO₂e</small></div></div>
+      </div>
+      <p class="hint" style="margin-top:12px">Difference of 480 tCO₂e comes from 2,100 MWh of retired REGO certificates at Northgate Plant.</p>
+    </div>
+    <div class="card">
+      <p class="chart-t">Data quality</p><p class="chart-s">The first thing an assurer asks about</p>
+      <div class="strip">
+        <i style="width:41%;background:var(--s1)"></i><i style="width:27%;background:var(--s3)"></i>
+        <i style="width:22%;background:var(--s4)"></i><i style="width:10%;background:var(--s5)"></i>
+      </div>
+      <div class="legend">
+        <span><i class="sw" style="background:var(--s1)"></i> Measured 41%</span>
+        <span><i class="sw" style="background:var(--s3)"></i> Calculated 27%</span>
+        <span><i class="sw" style="background:var(--s4)"></i> Estimated 22%</span>
+        <span><i class="sw" style="background:var(--s5)"></i> Proxy 10%</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SITE DETAIL ============ -->
+<section class="screen" id="s-site">
+  <div class="hd"><div>
+    <h1>Northgate Plant</h1>
+    <p class="sub">MI-NG-01 · Manufacturing plant · Leeds, West Yorkshire, UK · grid region <b>GB-NAT</b> · owned, operational control</p>
+  </div><button class="btn ghost">Site actions ▾</button></div>
+
+  <div class="tabs" id="sitetabs">
+    <button data-t="prof" aria-current="true">Profile</button>
+    <button data-t="ass">Assets <span class="chip">7</span></button>
+    <button data-t="emi">Emissions</button>
+    <button>Data Collection</button><button>Documents</button><button>Tasks</button><button>History</button>
+  </div>
+
+  <div class="sitetab on" id="t-prof">
+    <div class="two" style="grid-template-columns:1fr 300px;align-items:start">
+      <div>
+        <div class="card f">
+          <h2 style="margin-top:0">Identity &amp; location</h2>
+          <div class="fgrid">
+            <div><label>Site name <span class="req">*</span></label><input value="Northgate Plant"></div>
+            <div><label>Site code <span class="req">*</span></label><input value="MI-NG-01"></div>
+            <div><label>Legal entity</label><input value="Meridian Industries Ltd"></div>
+            <div><label>Cost centre</label><input value="CC-1100"></div>
+            <div style="grid-column:1/-1"><label>Address</label><input value="Unit 7, Northgate Industrial Estate, Leeds LS10 1AB"></div>
+            <div><label>Country <span class="req">*</span></label><select><option>United Kingdom (GB)</option></select></div>
+            <div><label>Grid region <span class="req">*</span></label><select><option>GB-NAT</option><option>GB-SCOT</option></select>
+              <div class="hint">Selects the location-based electricity factor. Blank = broken binding.</div></div>
+          </div>
+          <h2>Classification <span class="pen">✎</span></h2>
+          <div class="fgrid">
+            <div><label>Site type <span class="req">*</span> <span class="pen">✎</span></label><select><option>Manufacturing plant</option><option>Office</option><option>Warehouse</option><option>Data centre</option></select>
+              <div class="hint">Drives which questionnaire template is assigned.</div></div>
+            <div><label>Ownership</label><select><option>Owned</option><option>Leased — operational</option><option>Franchise</option></select></div>
+            <div><label>Operating hours</label><input value="24 × 7"></div>
+            <div><label>Shifts per day</label><input value="3"></div>
+          </div>
+          <h2>Size &amp; intensity denominators <span class="pen">✎</span></h2>
+          <div class="fgrid">
+            <div><label>Floor area (m²) <span class="req">*</span></label><input value="28,400"></div>
+            <div><label>Production units / yr <span class="yours">YOURS</span> <span class="pen">✎</span></label><input value="1.42 m"></div>
+            <div><label>FTE headcount</label><input value="1,180"></div>
+            <div><label>Operating hours / yr <span class="yours">YOURS</span> <span class="pen">✎</span></label><input value="6,240"></div>
+            <div><label>Annual revenue (GBP)</label><input value=""><div class="hint">Needed for revenue-intensity metric</div></div>
+            <div><label>Consolidation share</label><input value="1.00"></div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="card">
+          <p class="rl" style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600;margin:0 0 10px">Profile completeness</p>
+          <div class="meter" style="margin-bottom:12px"><div class="bar"><i style="width:78%"></i></div><span class="pct">78%</span></div>
+          <div style="font-size:12.5px;color:var(--ink2);line-height:2">
+            <div><span class="pill crit">⚠</span> Annual revenue missing</div>
+            <div><span class="pill crit">⚠</span> Approver not assigned</div>
+            <div><span class="pill ok">✓</span> Grid region set</div>
+          </div>
+          <p class="hint" style="margin-top:12px">An incomplete profile silently breaks factor resolution downstream — that's why it's flagged on the dashboard.</p>
+        </div>
+        <div class="card" style="margin-top:12px">
+          <p style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600;margin:0 0 10px">Contacts</p>
+          <div style="font-size:13px;line-height:2;color:var(--ink2)">
+            <div>Data owner · <b style="color:var(--ink)">R. Okafor</b></div>
+            <div>Approver · <span class="pill crit">unassigned</span></div>
+            <div>Finance · <b style="color:var(--ink)">S. Bianchi</b></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sitetab" id="t-ass">
+    <div class="hd"><div><h2 style="margin-top:0">Assets — what this site actually has</h2>
+      <p class="sub" style="margin-bottom:14px">Adding an asset makes its questions appear in Data Collection. Removing it makes them disappear — and removes them from the completeness denominator.</p></div>
+      <button class="btn">+ Add asset</button></div>
+    <div class="card" style="padding:16px 6px 6px">
+      <table>
+        <thead><tr><th>Asset</th><th>Category</th><th>Fuel / refrigerant</th><th>Capacity</th><th class="num">Qty</th><th>Commissioned</th><th>Status</th><th>Drives</th></tr></thead>
+        <tbody>
+          <tr><td><b>Backup generator DG-1</b><div class="hint">Basement · tag GEN-001</div></td><td>Stationary combustion</td><td>Diesel</td><td>500 kVA</td><td class="num">1</td><td>2019-04</td><td><span class="pill ok">✓ Active</span></td><td><span class="chip">Q1</span></td></tr>
+          <tr><td><b>Boiler B-2</b></td><td>Stationary combustion</td><td>Natural gas</td><td>2 t/h steam</td><td class="num">1</td><td>2016-11</td><td><span class="pill ok">✓ Active</span></td><td><span class="chip">Q2</span></td></tr>
+          <tr><td><b>Chiller CH-1</b></td><td>Refrigeration</td><td>R-410A · 120 kg charge</td><td>300 TR</td><td class="num">2</td><td>2021-02</td><td><span class="pill ok">✓ Active</span></td><td><span class="chip">Q3</span></td></tr>
+          <tr><td><b>Forklift fleet</b></td><td>Mobile combustion</td><td>LPG</td><td>—</td><td class="num">6</td><td>—</td><td><span class="pill ok">✓ Active</span></td><td><span class="chip">Q6</span></td></tr>
+          <tr><td><b>Paint booth PB-1</b></td><td>Process</td><td>Solvents (VOC)</td><td>12 k units/yr</td><td class="num">1</td><td>—</td><td><span class="pill ok">✓ Active</span></td><td><span class="chip">Q4</span></td></tr>
+          <tr><td><b>Compressor house AC-1</b></td><td>Process</td><td>Electric</td><td>250 kW</td><td class="num">1</td><td>2018-06</td><td><span class="pill ok">✓ Active</span></td><td><span class="chip">Q11</span></td></tr>
+          <tr><td><b>Rooftop solar</b></td><td>On-site generation</td><td>—</td><td>180 kWp</td><td class="num">1</td><td>2023-08</td><td><span class="pill ok">✓ Active</span></td><td><span class="chip">Q9</span></td></tr>
+          <tr style="opacity:.55"><td><b>Boiler B-1 (retired)</b></td><td>Stationary combustion</td><td>Furnace oil</td><td>1 t/h</td><td class="num">1</td><td>2009-03</td><td><span class="pill">Decommissioned 2025-11</span></td><td><span class="hint">FY25 only</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note"><b>The point of this table:</b> the user describes their building in words they already use — “we have two R-410A chillers” — and the GHG Protocol taxonomy is inferred behind it. Nobody has to know what “fugitive emissions” means to answer the question about refrigerant top-ups — and if “Chiller” isn't your word for it, rename the asset type to “Cooling unit” and every screen follows. A decommissioned asset still drives questions for the periods it was active in, which is what keeps FY2025 reproducible.</div>
+  </div>
+
+  <div class="sitetab" id="t-emi">
+    <h2 style="margin-top:0">Emission records — FY2026</h2>
+    <p class="sub">Read-only. Every row expands to show the arithmetic.</p>
+    <div class="card" style="padding:16px 6px 6px">
+      <table>
+        <thead><tr><th>Source</th><th>Scope</th><th>Basis</th><th class="num">Quantity</th><th class="num">Factor</th><th class="num">tCO₂e</th><th>Quality</th><th></th></tr></thead>
+        <tbody>
+          <tr onclick="mth(this)"><td><b>Diesel — Backup generator DG-1</b></td><td>1</td><td>Single</td><td class="num">14,200 L</td><td class="num">2.68000</td><td class="num"><b>38.06</b></td><td><span class="pill ok">✓ Measured</span></td><td><button class="linkbtn">show maths ▾</button></td></tr>
+          <tr><td colspan="8" style="padding:0;border:0"><div class="maths">
+            <table><tbody>
+              <tr><td>Quantity</td><td class="mono">14,200 L</td><td></td></tr>
+              <tr><td>→ normalised</td><td class="mono">14,200 L</td><td class="hint">unit conversion factor 1.000000000000</td></tr>
+              <tr><td>× Emission factor</td><td class="mono">2.680000000000 kgCO₂e / L</td><td class="hint">DEFRA 2026 v1.0, Table 5 · valid 2026-01-01 → 2026-12-31</td></tr>
+              <tr><td>× GWP</td><td class="mono">1.0</td><td class="hint">IPCC AR6 · gas CO₂e (blended)</td></tr>
+              <tr><td>× Consolidation share</td><td class="mono">1.00</td><td class="hint">operational control</td></tr>
+              <tr class="eq"><td>= Emissions</td><td class="mono"><b>38,056.000 kgCO₂e = 38.06 tCO₂e</b></td><td class="hint">engine v1.2.0 · calculated 2026-08-14 14:02</td></tr>
+            </tbody></table>
+            <div style="margin-top:9px;display:flex;gap:8px;align-items:center"><span class="pill">🗎 invoice_DG1_FY26.pdf</span><span class="pill">Answer Q1 by R. Okafor</span><span class="pill">sha256 4f9a…c21b</span></div>
+          </div></td></tr>
+          <tr><td><b>Grid electricity — location-based</b></td><td>2</td><td>Location</td><td class="num">4,802,000 kWh</td><td class="num">0.71000</td><td class="num"><b>3,409.42</b></td><td><span class="pill ok">✓ Measured</span></td><td><button class="linkbtn">show maths ▾</button></td></tr>
+          <tr><td><b>Grid electricity — market-based</b></td><td>2</td><td>Market</td><td class="num">4,802,000 kWh</td><td class="num">0.61000</td><td class="num"><b>2,929.22</b></td><td><span class="pill ok">✓ Measured</span></td><td><button class="linkbtn">show maths ▾</button></td></tr>
+          <tr><td><b>R-410A top-up — Chiller CH-1</b></td><td>1</td><td>Single</td><td class="num">42 kg</td><td class="num">2,255.500</td><td class="num"><b>94.73</b></td><td><span class="pill warn">◐ Calculated</span></td><td><button class="linkbtn">show maths ▾</button></td></tr>
+          <tr><td><b>Process solvents — PB-1</b></td><td>1</td><td>Single</td><td class="num">18,400 kg</td><td class="num">2.410</td><td class="num"><b>44.34</b></td><td><span class="pill warn">◐ Estimated</span></td><td><button class="linkbtn">show maths ▾</button></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note"><b>Build this expander early.</b> It is the trust surface of the entire product. Every input that went into the number is stored on the record — not looked up live — so this panel renders identically in 2030 after the DEFRA factor has been superseded twice.</div>
+  </div>
+</section>
+<!-- ============ DATA COLLECTION ============ -->
+<section class="screen" id="s-quest">
+  <div class="hd"><div>
+    <h1>Data Collection — Northgate Plant</h1>
+    <p class="sub">Standard Operations v3 · FY2026 · assigned to R. Okafor · due 31 May 2027 · <b>Saved 12:04</b></p>
+  </div><button class="btn">Submit section for review</button></div>
+
+  <div class="q3">
+    <div class="card tree">
+      <div class="grp">Scope 1 <span class="pen">✎</span></div>
+      <button aria-current="true"><span class="ring" style="--p:88"></span> Stationary combustion</button>
+      <button><span class="ring" style="--p:100"></span> Mobile combustion</button>
+      <button><span class="ring" style="--p:50"></span> Fugitive &amp; process</button>
+      <div class="grp">Scope 2</div>
+      <button><span class="ring done"></span> Purchased electricity</button>
+      <button><span class="ring" style="--p:0"></span> Purchased steam</button>
+      <div class="grp">Scope 3</div>
+      <button><span class="ring" style="--p:40"></span> 3.1 Purchased goods</button>
+      <button><span class="ring" style="--p:0"></span> 3.3 Fuel &amp; energy upstream</button>
+      <button><span class="ring" style="--p:70"></span> 3.5 Waste</button>
+      <button><span class="ring" style="--p:20"></span> 3.6 Business travel</button>
+      <button><span class="ring" style="--p:0"></span> 3.7 Commuting</button>
+      <div class="hint" style="padding:10px 9px 2px">3.9–3.15 hidden — no applicable assets or activities at this site.</div>
+    </div>
+
+    <div>
+      <div class="qcard answered">
+        <div class="qcode">Q1 · SCOPE 1 › STATIONARY COMBUSTION · required <span class="pen">✎</span></div>
+        <div class="qlab">How much diesel did the backup generator (DG-1) consume in FY2026?</div>
+        <div class="qhelp">Add up your fuel delivery invoices for the period. If you only have spend, use Q1b instead.</div>
+        <div class="qrow">
+          <input value="14,200"><select><option>Litres</option><option>m³</option><option>US gallons</option></select>
+          <select style="min-width:150px"><option>Measured</option><option>Calculated</option><option>Estimated</option><option>Proxy</option></select>
+        </div>
+        <div class="hint" style="margin-top:6px">Unit list restricted to <b>Volume</b> — the question's declared dimension. kWh cannot appear here.</div>
+        <div class="qfoot">
+          <button class="linkbtn">📎 1 attachment</button><button class="linkbtn">💬 Comment</button>
+          <button class="linkbtn" onclick="mth2(this)">show maths ▾</button>
+          <span class="pill ok">✓ Answered</span>
+          <span class="result">38.06 tCO₂e</span>
+        </div>
+        <div class="maths">
+          <table><tbody>
+            <tr><td>14,200 L</td><td class="mono">× 2.680000000000 kgCO₂e/L</td><td class="hint">DEFRA 2026 v1.0 T5</td></tr>
+            <tr><td>× GWP 1.0</td><td class="mono">× share 1.00</td><td class="hint">IPCC AR6</td></tr>
+            <tr class="eq"><td>= 38,056 kgCO₂e</td><td class="mono"><b>38.06 tCO₂e</b></td><td></td></tr>
+          </tbody></table>
+        </div>
+      </div>
+
+      <div class="qcard answered">
+        <div class="qcode">Q2 · SCOPE 1 › STATIONARY COMBUSTION · required</div>
+        <div class="qlab">How much natural gas did Boiler B-2 consume in FY2026?</div>
+        <div class="qhelp">From your gas utility bills. Enter in the unit shown on the bill — we convert.</div>
+        <div class="qrow"><input value="182,400"><select><option>m³</option><option>Litres</option><option>GJ</option></select>
+          <select style="min-width:150px"><option>Measured</option></select></div>
+        <div class="qfoot"><button class="linkbtn">📎 3 attachments</button><button class="linkbtn">💬 Comment</button>
+          <span class="pill ok">✓ Answered</span><span class="result">344.71 tCO₂e</span></div>
+      </div>
+
+      <div class="qcard flagged">
+        <div class="qcode">Q3 · SCOPE 1 › FUGITIVE · required · <span style="color:var(--s1)">shown because this site has an R-410A chiller</span></div>
+        <div class="qlab">How much R-410A was added to Chiller CH-1 during FY2026?</div>
+        <div class="qhelp">Top-up / recharge method: the mass of refrigerant added during the year, from service records. Not the total charge.</div>
+        <div class="qrow"><input value="42"><select><option>kg</option><option>lb</option></select>
+          <select style="min-width:150px"><option>Calculated</option></select></div>
+        <div class="qfoot"><button class="linkbtn">📎 Attach evidence</button>
+          <span class="pill warn">⚠ Flagged by approver</span><span class="result">94.73 tCO₂e</span></div>
+      </div>
+
+      <div class="qcard">
+        <div class="qcode">Q4 · SCOPE 1 › PROCESS · required</div>
+        <div class="qlab">How much solvent was consumed in the paint booth (PB-1) in FY2026?</div>
+        <div class="qhelp">From your solvent purchase records, less any recovered or returned for reprocessing.</div>
+        <div class="qrow"><input placeholder="—" style="color:var(--muted)"><select><option>kg</option><option>Cylinders</option></select>
+          <select style="min-width:150px"><option>Select quality…</option></select></div>
+        <div class="hint" style="margin-top:6px">👻 FY2025 answer was <b>17,900 kg</b> — <button class="linkbtn">copy</button></div>
+        <div class="qfoot"><label style="font-size:12px;display:flex;gap:6px;align-items:center"><input type="checkbox" style="width:auto"> Not applicable</label>
+          <span class="pill">○ Unanswered</span><span class="result" style="color:var(--muted)">—</span></div>
+      </div>
+
+      <div class="qcard">
+        <div class="qcode">Q5 · SCOPE 1 › STATIONARY COMBUSTION · optional</div>
+        <div class="qlab">Did you use furnace oil at any point in FY2026?</div>
+        <div class="qrow"><label style="font-size:13px;display:flex;gap:6px;align-items:center"><input type="radio" name="fo" style="width:auto"> Yes</label>
+          <label style="font-size:13px;display:flex;gap:6px;align-items:center"><input type="radio" name="fo" style="width:auto" checked> No</label></div>
+        <div class="hint" style="margin-top:6px">Answering “Yes” reveals two follow-up questions (<span class="mono">visible_if → answer_equals</span>).</div>
+        <div class="qfoot"><span class="pill ok">✓ Answered</span><span class="result" style="color:var(--muted)">no emissions</span></div>
+      </div>
+    </div>
+
+    <div class="rail">
+      <div class="card blk">
+        <p class="rl">Section progress</p>
+        <div class="meter"><div class="bar"><i style="width:88%"></i></div><span class="pct">88%</span></div>
+        <p class="hint" style="margin-top:8px">7 of 8 applicable required questions answered.</p>
+      </div>
+      <div class="card blk">
+        <p class="rl">Evidence — Q1</p>
+        <div class="att">🗎 invoice_DG1_FY26.pdf <span class="hint" style="margin-left:auto">1.2 MB</span></div>
+        <button class="btn ghost" style="width:100%;box-sizing:border-box">+ Attach file</button>
+      </div>
+      <div class="card blk">
+        <p class="rl">Comments (2)</p>
+        <div class="cmt"><b>A. Lindqvist · 12 Aug</b>Does this include the March top-up? It looks low against the service log.</div>
+        <div class="cmt"><b>R. Okafor · 13 Aug</b>Checking with the AMC vendor, will update by Friday.</div>
+      </div>
+      <div class="card blk">
+        <p class="rl">Why this section?</p>
+        <p class="hint">Questions here are shown because this site's asset list contains a diesel generator, a gas boiler and an R-410A chiller. Warehouse sites see none of them.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FACTOR LAB ============ -->
+<section class="screen" id="s-lab">
+  <div class="hd"><div><h1>Factor Lab</h1>
+    <p class="sub">The backend factor library, and the map from every question to the factor it uses</p></div>
+    <button class="btn ghost">Import factors (CSV)</button></div>
+
+  <div class="banner"><b>⚠ 3 broken bindings.</b> Questions Q14, Q22 and Q31 have no matching factor and cannot be published until fixed.</div>
+
+  <div class="tabs" id="labtabs">
+    <button data-t="sets" aria-current="true">Factor sets</button>
+    <button data-t="facs">Factors <span class="chip">4,812</span></button>
+    <button data-t="map">Bindings map <span class="badge">3</span></button>
+    <button>Units &amp; fuel properties</button>
+  </div>
+
+  <div class="labtab on" id="t-sets">
+    <div class="two" style="grid-template-columns:1fr 1fr 1fr">
+      <div class="card"><div style="display:flex;align-items:center;gap:8px"><b>DEFRA 2026</b><span class="pill ok">✓ Active</span></div>
+        <p class="hint" style="margin:6px 0 12px">v1.1 · published 2026-06-01 · UK &amp; global · OGL licence</p>
+        <div style="font-size:12.5px;color:var(--ink2);line-height:1.9">
+          <div>2,140 factors</div><div><b style="color:var(--ink)">28</b> questions bind here</div><div>Period default for FY2026</div></div>
+      </div>
+      <div class="card"><div style="display:flex;align-items:center;gap:8px"><b>UK Grid (NG ESO)</b><span class="pill ok">✓ Active</span></div>
+        <p class="hint" style="margin:6px 0 12px">v2026.1 · published 2026-04-01 · UK grid regions</p>
+        <div style="font-size:12.5px;color:var(--ink2);line-height:1.9">
+          <div>36 factors</div><div><b style="color:var(--ink)">4</b> questions bind here</div><div>Used for location-based Scope 2</div></div>
+      </div>
+      <div class="card" style="opacity:.6"><div style="display:flex;align-items:center;gap:8px"><b>DEFRA 2025</b><span class="pill">◌ Archived</span></div>
+        <p class="hint" style="margin:6px 0 12px">v1.2 · published 2025-06-01</p>
+        <div style="font-size:12.5px;color:var(--ink2);line-height:1.9">
+          <div>2,088 factors</div><div><b style="color:var(--ink)">0</b> questions bind here</div><div>Still referenced by 1,204 FY2025 records</div></div>
+      </div>
+    </div>
+    <div class="note"><b>Archived ≠ deleted.</b> FY2025's emission records snapshotted these values, so the set stays for lineage. Even if this set were deleted outright, every FY2025 number would still render — the snapshot on each record is the truth, the link is only a convenience.</div>
+  </div>
+
+  <div class="labtab" id="t-facs">
+    <div class="card" style="padding:14px;margin-bottom:12px;display:flex;gap:9px;flex-wrap:wrap">
+      <select class="sel"><option>All sets</option></select><select class="sel"><option>All scopes</option></select>
+      <select class="sel"><option>All regions</option></select><select class="sel"><option>Valid on 2026-08-20</option></select>
+      <input class="sel" placeholder="Search fuel or material…" style="min-width:200px">
+    </div>
+    <div class="card" style="padding:16px 6px 6px">
+      <table>
+        <thead><tr><th>Fuel / material</th><th>Activity type</th><th>Method</th><th>Region</th><th>Gas</th><th class="num">Value</th><th>Unit</th><th>Valid from</th><th>Valid to</th><th>Source</th></tr></thead>
+        <tbody>
+          <tr><td><b>diesel</b></td><td>Stationary comb.</td><td>Fuel-based</td><td>GLOBAL</td><td>CO₂e</td><td class="num">2.680000</td><td>kgCO₂e / L</td><td>2026-01-01</td><td>2026-12-31</td><td>DEFRA 2026 v1.0 T5</td></tr>
+          <tr style="opacity:.6"><td><b>diesel</b> <span class="pill">superseded →</span></td><td>Stationary comb.</td><td>Fuel-based</td><td>GLOBAL</td><td>CO₂e</td><td class="num">2.660000</td><td>kgCO₂e / L</td><td>2025-01-01</td><td>2025-12-31</td><td>DEFRA 2025 v1.2 T5</td></tr>
+          <tr><td><b>natural_gas</b></td><td>Stationary comb.</td><td>Fuel-based</td><td>GLOBAL</td><td>CO₂e</td><td class="num">1.890000</td><td>kgCO₂e / m³</td><td>2026-01-01</td><td>—</td><td>DEFRA 2026 v1.1 T2</td></tr>
+          <tr><td><b>grid_electricity</b></td><td>Purchased elec.</td><td>Location</td><td>GB-NAT</td><td>CO₂e</td><td class="num">0.710000</td><td>kgCO₂e / kWh</td><td>2026-04-01</td><td>2027-03-31</td><td>NG ESO 2026</td></tr>
+          <tr><td><b>r410a</b></td><td>Fugitive</td><td>Top-up</td><td>GLOBAL</td><td>HFC</td><td class="num">2255.500000</td><td>kgCO₂e / kg</td><td>2024-01-01</td><td>—</td><td>IPCC AR6 GWP₁₀₀</td></tr>
+          <tr><td><b>solvent_voc</b></td><td>Process</td><td>Material-based</td><td>GLOBAL</td><td>CO₂e</td><td class="num">2.410000</td><td>kgCO₂e / kg</td><td>2026-01-01</td><td>—</td><td>DEFRA 2026 v1.1 T11</td></tr>
+          <tr><td><b>waste_landfill_mixed</b></td><td>Waste</td><td>Waste-type</td><td>GLOBAL</td><td>CO₂e</td><td class="num">0.586000</td><td>kgCO₂e / kg</td><td>2026-01-01</td><td>—</td><td>DEFRA 2026 v1.1 T14</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note"><b>Rows are never edited in place.</b> The edit drawer offers “Create new version” instead — a new row with a new <span class="mono">valid_from</span>, and <span class="mono">superseded_by_id</span> set on the old one. This is the single rule that makes last year's report reproducible.</div>
+  </div>
+
+  <div class="labtab" id="t-map">
+    <h2 style="margin-top:0">Which question uses which factor</h2>
+    <p class="sub">Filter: Standard Operations v3 · all scopes</p>
+    <div class="card" style="padding:16px 6px 6px">
+      <table>
+        <thead><tr><th>Question</th><th>Binding</th><th>Resolves to</th><th class="num">Value</th><th>Health</th></tr></thead>
+        <tbody>
+          <tr><td><b>Q1</b> Diesel consumed — DG-1</td><td class="mono">STATIONARY_COMBUSTION · FUEL_BASED · diesel</td><td>DEFRA 2026 v1.0 T5 <span class="hint">GLOBAL</span></td><td class="num">2.680000</td><td><span class="pill ok">✓ OK</span></td></tr>
+          <tr><td><b>Q2</b> Natural gas — Boiler B-2</td><td class="mono">STATIONARY_COMBUSTION · FUEL_BASED · natural_gas</td><td>DEFRA 2026 v1.1 T2 <span class="hint">GLOBAL</span></td><td class="num">1.890000</td><td><span class="pill ok">✓ OK</span></td></tr>
+          <tr><td><b>Q9</b> Grid electricity</td><td class="mono">PURCHASED_ELECTRICITY · LOCATION+MARKET · grid_electricity</td><td>NG ESO 2026 <span class="hint">GB-NAT</span> + residual mix</td><td class="num">0.710000</td><td><span class="pill ok">✓ OK · dual</span></td></tr>
+          <tr><td><b>Q14</b> Purchased raw materials (spend)</td><td class="mono">SPEND · SPEND_BASED · raw_materials</td><td><span class="hint">no match for region GB</span></td><td class="num">—</td><td><span class="pill crit">⛔ Broken</span></td></tr>
+          <tr><td><b>Q22</b> Contract cleaning (spend)</td><td class="mono">SPEND · SPEND_BASED · cleaning_services</td><td><span class="hint">two factors match equally</span></td><td class="num">—</td><td><span class="pill crit">⛔ Ambiguous</span></td></tr>
+          <tr><td><b>Q28</b> Staff air travel</td><td class="mono">DISTANCE · DISTANCE_BASED · air_short_haul</td><td>DEFRA 2026 v1.1 T7 <span class="hint">GLOBAL — country factor preferred</span></td><td class="num">0.156000</td><td><span class="pill warn">⚠ Fallback region</span></td></tr>
+          <tr><td><b>Q31</b> Waste to landfill</td><td class="mono">WASTE · WASTE_TYPE_SPECIFIC · waste_mixed_commercial</td><td><span class="hint">material code not in any active set</span></td><td class="num">—</td><td><span class="pill crit">⛔ Broken</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note"><b>This screen is the admin's morning job.</b> The badge in the sidebar counts broken bindings. A question with a broken or ambiguous binding cannot be published — which prevents the signature failure of this product category: a beautiful form that silently records zeros.</div>
+    <div style="display:flex;gap:9px;margin-top:16px"><button class="btn">Recalculate FY2026 with DEFRA 2026 v1.1</button><button class="btn ghost">Preview diff first</button></div>
+    <p class="hint" style="margin-top:8px">Recalculation is never automatic, always previewed, always audit-logged, and refused outright on locked periods.</p>
+  </div>
+</section>
+<!-- ============ BUILDER ============ -->
+<section class="screen" id="s-build">
+  <div class="hd"><div><h1>Questionnaire Builder</h1>
+    <p class="sub">Standard Operations · <b>v4 draft</b> · v3 is live on 6 sites · last edited 2 hours ago</p></div>
+    <button class="btn ghost" style="margin-left:auto">Preview</button><button class="btn" style="margin-left:8px">Publish v4…</button></div>
+
+  <div class="b3">
+    <div class="card">
+      <p style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600;margin:0 0 10px">Question library</p>
+      <input class="sel" placeholder="Search…" style="width:100%;margin-bottom:11px">
+      <div class="hint" style="margin:10px 0 6px;font-weight:600">Scope 1</div>
+      <div class="libitem"><span class="drag">⠿</span> Diesel quantity</div>
+      <div class="libitem"><span class="drag">⠿</span> Natural gas quantity</div>
+      <div class="libitem"><span class="drag">⠿</span> LPG quantity</div>
+      <div class="libitem"><span class="drag">⠿</span> Refrigerant top-up</div>
+      <div class="libitem"><span class="drag">⠿</span> Process purchased</div>
+      <div class="hint" style="margin:14px 0 6px;font-weight:600">Scope 2</div>
+      <div class="libitem"><span class="drag">⠿</span> Grid electricity kWh</div>
+      <div class="libitem"><span class="drag">⠿</span> REC / EAC retired</div>
+      <div class="hint" style="margin:14px 0 6px;font-weight:600">Scope 3</div>
+      <div class="libitem"><span class="drag">⠿</span> Spend by category</div>
+      <div class="libitem"><span class="drag">⠿</span> Waste by stream</div>
+      <div class="libitem"><span class="drag">⠿</span> Travel legs (table)</div>
+      <button class="btn ghost" style="width:100%;margin-top:12px;box-sizing:border-box">+ New question</button>
+    </div>
+
+    <div class="canvas">
+      <div class="sec">
+        <div class="sechd"><span class="drag">⠿</span> Scope 1 › Stationary combustion <span class="chip" style="margin-left:auto">3 questions</span></div>
+        <div class="qi" aria-current="true"><span class="drag">⠿</span> <b>Q1</b> Diesel consumed — {{asset.name}} <span class="pill ok" style="margin-left:auto">✓ bound</span></div>
+        <div class="qi"><span class="drag">⠿</span> <b>Q2</b> Natural gas — {{asset.name}} <span class="pill ok" style="margin-left:auto">✓ bound</span></div>
+        <div class="qi"><span class="drag">⠿</span> <b>Q5</b> Furnace oil used? <span class="pill" style="margin-left:auto">no binding</span></div>
+      </div>
+      <div class="sec">
+        <div class="sechd"><span class="drag">⠿</span> Scope 1 › Fugitive &amp; process <span class="chip" style="margin-left:auto">2 questions</span></div>
+        <div class="qi"><span class="drag">⠿</span> <b>Q3</b> Refrigerant added — {{asset.name}} <span class="pill ok" style="margin-left:auto">✓ bound</span></div>
+        <div class="qi"><span class="drag">⠿</span> <b>Q4</b> Solvent consumed <span class="pill ok" style="margin-left:auto">✓ bound</span></div>
+      </div>
+      <div class="sec">
+        <div class="sechd"><span class="drag">⠿</span> Scope 3 › 3.1 Purchased goods <span class="chip" style="margin-left:auto">4 questions</span></div>
+        <div class="qi"><span class="drag">⠿</span> <b>Q14</b> Raw materials spend <span class="pill crit" style="margin-left:auto">⛔ broken</span></div>
+        <div class="qi"><span class="drag">⠿</span> <b>Q22</b> Contract cleaning spend <span class="pill crit" style="margin-left:auto">⛔ ambiguous</span></div>
+      </div>
+      <button class="btn ghost" style="width:100%;box-sizing:border-box">+ Add section</button>
+    </div>
+
+    <div class="card insp f">
+      <p style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600;margin:0 0 12px">Inspector — Q1</p>
+      <div class="f"><label>Label</label><textarea rows="3">How much diesel did the {{asset.name}} consume in {{period.label}}?</textarea></div>
+      <div class="f"><label>Help text</label><textarea rows="2">Add up your fuel delivery invoices for the period.</textarea></div>
+      <div class="f"><label>Input type</label><select><option>Number with unit</option><option>Number</option><option>Repeating table</option><option>Single select</option></select></div>
+      <div class="f"><label>Unit dimension</label><select><option>Volume</option><option>Mass</option><option>Energy</option></select>
+        <div class="hint">Restricts the respondent's unit dropdown. Cross-dimension is a hard error, not a warning.</div></div>
+      <div class="f" style="display:flex;gap:16px"><label style="display:flex;gap:6px;align-items:center;text-transform:none;letter-spacing:0;font-size:12.5px;color:var(--ink2)"><input type="checkbox" checked style="width:auto"> Required</label>
+        <label style="display:flex;gap:6px;align-items:center;text-transform:none;letter-spacing:0;font-size:12.5px;color:var(--ink2)"><input type="checkbox" checked style="width:auto"> Evidence required</label></div>
+      <div class="f"><label>Visible if</label>
+        <div class="mono" style="border:1px solid var(--border);border-radius:7px;padding:9px;background:var(--plane);line-height:1.6">site_has_asset(<br>&nbsp;&nbsp;category: STATIONARY_COMBUSTION,<br>&nbsp;&nbsp;fuel: diesel<br>)</div>
+        <div class="hint">Evaluated by one pure function, on client and server alike.</div></div>
+
+      <div class="div">Factor binding</div>
+      <div class="f"><label>Activity type</label><select><option>STATIONARY_COMBUSTION</option><option>MOBILE_COMBUSTION</option><option>FUGITIVE</option></select></div>
+      <div class="f"><label>Method</label><select><option>FUEL_BASED</option><option>SPEND_BASED</option><option>DISTANCE_BASED</option></select></div>
+      <div class="f"><label>Fuel / material code</label><select><option>diesel</option><option>natural_gas</option><option>lpg</option></select></div>
+      <div class="f"><label>Region strategy</label><select><option>Site country → grid region → GLOBAL</option><option>Site grid only</option><option>Fixed region</option></select></div>
+      <div class="f"><label>Factor set</label><select><option>Period default (DEFRA 2026 v1.1)</option><option>Pinned…</option></select></div>
+      <div class="f"><label>Output basis</label><select><option>Single</option><option>Dual (location + market)</option></select></div>
+      <div class="f"><label>Multiplier</label><input value="1.0"></div>
+      <button class="btn" style="width:100%;box-sizing:border-box">Test binding ▸</button>
+
+      <div class="testpanel">
+        <div class="hd" style="font-weight:700;margin-bottom:7px">✓ Binding resolves</div>
+        <div class="mono" style="line-height:1.8">
+          sample site: Northgate Plant (IN, GB-NAT)<br>
+          sample answer: 1,000 L<br>
+          → factor 2.680000000000 kgCO₂e/L<br>
+          → DEFRA 2026 v1.0 T5 · valid 2026-01-01→2026-12-31<br>
+          → GWP 1.0 (AR6) · share 1.00<br>
+          <b>= 2,680.000 kgCO₂e = 2.68 tCO₂e</b>
+        </div>
+      </div>
+      <div class="testpanel bad" style="margin-top:10px">
+        <div class="hd" style="font-weight:700;margin-bottom:7px">⛔ Q14 would fail</div>
+        <div class="mono" style="line-height:1.7">No factor matches fuel=<b>raw_materials</b>, region=<b>GB</b>, method=<b>SPEND_BASED</b> in DEFRA 2026 v1.1.<br><br>Add one in the Factor Lab, or change the region strategy to GLOBAL.</div>
+      </div>
+      <p class="hint" style="margin-top:12px">A question with a failing binding cannot be published. This gate is the whole reason the Builder is safe to hand to a non-engineer.</p>
+    </div>
+  </div>
+</section>
+<!-- ============ GET STARTED ============ -->
+<section class="screen" id="s-start">
+  <div class="hd"><div><h1>How Green Ledger works</h1>
+    <p class="sub">Four things happen, in order. Everything in the product is one of them.</p></div></div>
+
+  <div class="flow">
+    <div class="fb" data-i="1"><div class="fn">1</div><b>What you have</b>
+      <p>Your sites, and what's inside them — boilers, generators, chillers, vehicles, IT.</p><span class="fl">Sites → Assets</span></div>
+    <div class="farr">drives</div>
+    <div class="fb" data-i="2"><div class="fn">2</div><b>What we ask</b>
+      <p>A plain-language questionnaire. Only the questions that apply to that site appear.</p><span class="fl">Data Collection</span></div>
+    <div class="farr">answers</div>
+    <div class="fb" data-i="3"><div class="fn">3</div><b>How it's counted</b>
+      <p>Each question is mapped to a published emission factor. That mapping is yours to control.</p><span class="fl">Factor Lab</span></div>
+    <div class="farr">become</div>
+    <div class="fb" data-i="4"><div class="fn">4</div><b>What comes out</b>
+      <p>Dashboards, disclosures, and an audit pack an assurer can recompute in Excel.</p><span class="fl">Reports</span></div>
+  </div>
+
+  <div class="two" style="grid-template-columns:1fr 340px;align-items:start;margin-top:22px">
+    <div>
+      <h2 style="margin-top:0">Your setup checklist</h2>
+      <div class="card" style="padding:6px 16px">
+        <div class="chk done"><span class="ci">✓</span><div><b>1 · Set your organisation basics</b>
+          <p>Consolidation approach and base year decide how every later number is scoped. Changing them afterwards means restating published figures.</p></div>
+          <button class="linkbtn">Review</button></div>
+        <div class="chk warn"><span class="ci">◇</span><div><b>2 · Make the product speak your language</b>
+          <p>Rename anything — “Stationary combustion” can read “Fixed fuel burning”, or “Boiler gas”. The codes underneath never change, so no number moves.</p></div>
+          <button class="linkbtn" onclick="go('labels')">Open Labels</button></div>
+        <div class="chk part"><span class="ci">◐</span><div><b>3 · Add your sites</b>
+          <p>Location and grid region decide which electricity factor applies. A site with no grid region can't resolve one.</p>
+          <div class="meter" style="margin-top:8px;max-width:260px"><div class="bar"><i style="width:36%"></i></div><span class="pct">4/11</span></div></div>
+          <button class="linkbtn" onclick="go('site')">Add sites</button></div>
+        <div class="chk part"><span class="ci">◐</span><div><b>4 · List what's at each site</b>
+          <p>This is the step people skip and regret. Your asset list is what makes the right questions appear and the wrong ones vanish — and it keeps a warehouse from sitting at 60% forever because it has no boiler.</p>
+          <div class="meter" style="margin-top:8px;max-width:260px"><div class="bar"><i style="width:50%"></i></div><span class="pct">2/4</span></div></div>
+          <button class="linkbtn" onclick="go('site')">Add assets</button></div>
+        <div class="chk done"><span class="ci">✓</span><div><b>5 · Load your emission factors</b>
+          <p>The published numbers you multiply by. Start with one set; add more as you go. 2 sets active.</p></div>
+          <button class="linkbtn" onclick="go('lab')">Factor Lab</button></div>
+        <div class="chk part"><span class="ci">◐</span><div><b>6 · Build your questionnaire</b>
+          <p>Write questions the way your team talks, then map each to a factor. The Builder refuses to publish a question whose mapping doesn't resolve — so a form can never silently record zeros.</p>
+          <div style="margin-top:8px"><span class="pill crit">⛔ 2 broken bindings</span></div></div>
+          <button class="linkbtn" onclick="go('build')">Open Builder</button></div>
+        <div class="chk"><span class="ci">○</span><div><b>7 · Assign it and invite your teams</b>
+          <p>Each site gets an owner, an approver and a due date.</p></div><button class="linkbtn">Assign</button></div>
+        <div class="chk blocked"><span class="ci">○</span><div><b>8 · Collect, review, approve</b>
+          <p>Contributors answer, approvers check, comments resolve disagreements in place.</p>
+          <div class="blockmsg">Blocked — needs a published questionnaire (step 6)</div></div></div>
+        <div class="chk blocked"><span class="ci">○</span><div><b>9 · Lock the period and report</b>
+          <p>Locking freezes the numbers. Reports are immutable and reproducible forever.</p>
+          <div class="blockmsg">Blocked — needs approved data (step 8)</div></div></div>
+      </div>
+
+      <h2>Show me one number, all the way through</h2>
+      <div class="card">
+        <div class="walk">
+          <div class="ws"><span class="wn">1</span><div><b>You said the plant has a diesel generator</b>
+            <p>Added on the site's Assets tab as “Backup generator DG-1”, fuel diesel, 500 kVA.</p></div></div>
+          <div class="ws"><span class="wn">2</span><div><b>So this question appeared</b>
+            <p>“How much diesel did the backup generator (DG-1) consume in FY2026?” — a number box and a unit dropdown limited to volume units.</p></div></div>
+          <div class="ws"><span class="wn">3</span><div><b>Someone answered it</b>
+            <p>14,200 litres, marked Measured, with the fuel invoice attached.</p></div></div>
+          <div class="ws"><span class="wn">4</span><div><b>The mapping found a factor</b>
+            <p><span class="mono">STATIONARY_COMBUSTION · FUEL_BASED · diesel · region GB</span> → DEFRA 2026 v1.0 Table 5 → 2.68 kgCO₂e per litre.</p></div></div>
+          <div class="ws"><span class="wn">5</span><div><b>The arithmetic ran, and every input was stored</b>
+            <p class="mono">14,200 L × 2.680000000000 kgCO₂e/L × GWP 1.0 × share 1.00 = 38,056 kgCO₂e = <b>38.06 tCO₂e</b></p></div></div>
+          <div class="ws"><span class="wn">6</span><div><b>It shows up in the report — and stays put</b>
+            <p>When DEFRA publishes 2.71 next year, this record still reports 2.68, because the factor value was copied onto it. Moving it to the new factor is a deliberate, logged act.</p></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <h2 style="margin-top:0">If you're new to this</h2>
+      <details class="cc" open><summary>What's a “scope”?</summary>
+        <p><b>Scope 1</b> — fuel you burn yourself. Generators, boilers, your own vehicles, refrigerant that leaks out.</p>
+        <p><b>Scope 2</b> — energy you buy. Electricity, steam, heating, cooling.</p>
+        <p><b>Scope 3</b> — everything else in your value chain: what you buy, how it's shipped, staff travel, waste, what happens to your products. Usually the biggest and the hardest.</p></details>
+      <details class="cc"><summary>What's an emission factor?</summary>
+        <p>A published number that converts an activity into emissions. One litre of diesel becomes 2.68 kg of CO₂e.</p>
+        <p>You don't invent them — you cite them. DEFRA, EPA, IEA and national grid operators publish them, and they change every year. Green Ledger stores which version you used on each record, so old reports never shift under you.</p></details>
+      <details class="cc"><summary>Why can't I edit last year?</summary>
+        <p>Because someone relied on that report. If the numbers could quietly change, the report would be worthless.</p>
+        <p>Corrections to a locked period become <b>restatements</b>: the old figure and the new one both appear, with a reason. Disclosed rather than hidden — which is what CSRD requires anyway.</p></details>
+      <details class="cc"><summary>What will my auditor ask for?</summary>
+        <p>The audit pack. One spreadsheet row per emission record with every input that produced it — quantity, unit, factor value, factor source and version, GWP, share, and the result.</p>
+        <p>They can recompute your entire inventory in Excel without logging in. Export it any time from Reports.</p></details>
+      <details class="cc"><summary>Do I need all 15 Scope 3 categories?</summary>
+        <p>You need to <i>address</i> all 15. You don't need data for all 15.</p>
+        <p>Mark the ones that don't apply as not material with a reason. That reason appears in the report — which satisfies the requirement to explain the omission, instead of leaving a silent gap.</p></details>
+
+      <div class="card" style="margin-top:16px">
+        <p style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600;margin:0 0 10px">The one rule</p>
+        <p style="font-size:13px;margin:0;color:var(--ink2);line-height:1.6">Every number Green Ledger reports can be reproduced from stored inputs — forever. A report generated today produces identical figures in 2035, after every factor in the system has been superseded. Everything else in the product exists to serve that.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ LABELS ============ -->
+<section class="screen" id="s-labels">
+  <div class="hd"><div><h1>Labels</h1>
+    <p class="sub">Rename anything in Green Ledger to match what your teams already say</p></div>
+    <button class="btn ghost">Export CSV</button><button class="btn" style="margin-left:8px">+ Add vocabulary entry</button></div>
+
+  <div class="note" style="margin-top:0"><b>Renaming never changes a number.</b> Every item has a permanent code the calculations use (<span class="mono">STATIONARY_COMBUSTION</span>) and a label you control (“Fixed fuel burning”). Change the label whenever you like — factors, imports, audit records and already-generated reports are untouched.</div>
+
+  <div class="card" style="padding:14px;margin-bottom:12px;display:flex;gap:9px;flex-wrap:wrap;align-items:center">
+    <input class="sel" placeholder="Search codes and labels…" style="min-width:230px">
+    <select class="sel"><option>All kinds</option><option>Activity types</option><option>Asset types</option><option>Scope 3 categories</option><option>Units</option><option>Statuses</option><option>Denominators</option></select>
+    <select class="sel"><option>Scope: Organisation</option><option>Scope: site type · Office</option><option>Scope: template · Standard Operations</option><option>Scope: single question</option></select>
+    <select class="sel"><option>English (en-GB)</option><option>Français</option><option>+ Add language</option></select>
+    <span class="spacer"></span><span class="pill info">28 labels customised</span>
+  </div>
+
+  <div class="card" style="padding:16px 6px 6px">
+    <table>
+      <thead><tr><th>Code</th><th>Kind</th><th>System default</th><th>Your label</th><th>Applies at</th><th>Used in</th><th></th></tr></thead>
+      <tbody>
+        <tr><td class="mono">STATIONARY_COMBUSTION</td><td>Activity type</td><td class="hint">Stationary combustion</td><td><b>Fixed fuel burning</b></td><td><span class="chip">Organisation</span></td><td><button class="linkbtn">12 questions</button></td><td><button class="linkbtn">✎</button></td></tr>
+        <tr style="background:var(--plane)"><td class="mono" style="padding-left:28px">↳ same code</td><td></td><td></td><td><b>Building heating</b></td><td><span class="chip">Site type · Office</span></td><td><button class="linkbtn">3 questions</button></td><td><button class="linkbtn">✎</button></td></tr>
+        <tr style="background:var(--plane)"><td class="mono" style="padding-left:28px">↳ same code</td><td></td><td></td><td><b>Generator fuel</b></td><td><span class="chip">Question · Q1</span></td><td><button class="linkbtn">1 question</button></td><td><button class="linkbtn">✎</button></td></tr>
+        <tr><td class="mono">MOBILE_COMBUSTION</td><td>Activity type</td><td class="hint">Mobile combustion</td><td><b>Fleet &amp; plant fuel</b></td><td><span class="chip">Organisation</span></td><td><button class="linkbtn">6 questions</button></td><td><button class="linkbtn">✎</button></td></tr>
+        <tr><td class="mono">scope3_cat_5</td><td>Scope 3 category</td><td class="hint">Waste generated in operations</td><td><b>Site waste</b></td><td><span class="chip">Organisation</span></td><td><button class="linkbtn">4 questions</button></td><td><button class="linkbtn">✎</button></td></tr>
+        <tr><td class="mono">PROXY</td><td>Data quality</td><td class="hint">Proxy</td><td><b>Rough estimate</b></td><td><span class="chip">Organisation</span></td><td><span class="hint">all forms</span></td><td><button class="linkbtn">✎</button></td></tr>
+        <tr><td class="mono">chiller</td><td>Asset type</td><td class="hint">Chiller</td><td><b>Cooling unit</b></td><td><span class="chip">Organisation</span></td><td><button class="linkbtn">9 assets</button></td><td><button class="linkbtn">✎</button></td></tr>
+        <tr><td class="mono">org_units_produced</td><td>Denominator <span class="pill ok">✓ yours</span></td><td class="hint">—</td><td><b>Units produced</b></td><td><span class="chip">Organisation</span></td><td><button class="linkbtn">4 sites</button></td><td><button class="linkbtn">✎</button></td></tr>
+        <tr><td class="mono">org_tonnes_shipped</td><td>Denominator <span class="pill ok">✓ yours</span></td><td class="hint">—</td><td><b>Tonnes shipped</b></td><td><span class="chip">Organisation</span></td><td><button class="linkbtn">2 sites</button></td><td><button class="linkbtn">✎</button></td></tr>
+        <tr style="opacity:.5"><td class="mono">GAL_UK</td><td>Unit</td><td class="hint">UK gallons</td><td><span class="hint">— hidden from pickers —</span></td><td><span class="chip">Organisation</span></td><td><span class="hint">—</span></td><td><button class="linkbtn">✎</button></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="two" style="margin-top:16px;align-items:start">
+    <div class="card">
+      <p class="chart-t">How a label is chosen</p><p class="chart-s">Most specific wins. First match going down this list is what renders.</p>
+      <div class="ladder">
+        <div class="lr on"><span class="ln">1</span> On one factor mapping <span class="lv">— “Generator fuel”</span></div>
+        <div class="lr"><span class="ln">2</span> On one question</div>
+        <div class="lr"><span class="ln">3</span> On one questionnaire template</div>
+        <div class="lr"><span class="ln">4</span> On a site type <span class="lv">— “Building heating” for offices</span></div>
+        <div class="lr"><span class="ln">5</span> Across your organisation <span class="lv">— “Fixed fuel burning”</span></div>
+        <div class="lr sys"><span class="ln">6</span> Green Ledger's default <span class="lv">— “Stationary combustion”</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <p class="chart-t">What you can and can't extend</p><p class="chart-s">Some lists are yours; some are defined by the standard</p>
+      <div style="font-size:13px;line-height:2.1;color:var(--ink2)">
+        <div><span class="pill ok">✓ Open</span> Site types, asset types, materials, document types, <b>intensity denominators</b> — rename <i>and</i> add your own</div>
+        <div><span class="pill warn">⚠ Closed</span> Scopes, the 15 Scope 3 categories, methods, data-quality levels — rename only</div>
+      </div>
+      <p class="hint" style="margin-top:12px">Closed lists come from the GHG Protocol and ESRS. Adding to them would break the report mapping, so the button says why instead of silently doing nothing.</p>
+    </div>
+  </div>
+
+  <div class="note"><b>The pencil is everywhere.</b> An admin sees a faint ✎ beside any label anywhere in the app — a section heading, a dropdown option, a chart legend. Clicking it opens this editor already scoped to where they clicked. Renaming happens in context, not by hunting through settings.</div>
+</section>
+
+
+
+
+</div>
+</div>
+<script>
+function tog(){var h=document.documentElement;h.dataset.theme=h.dataset.theme==='dark'?'light':'dark';}
+function go(id){
+  document.querySelectorAll('.screen').forEach(function(e){e.classList.toggle('on', e.id==='s-'+id);});
+  document.querySelectorAll('.nav button[data-s]').forEach(function(b){b.setAttribute('aria-current', b.dataset.s===id?'true':'false');});
+  window.scrollTo(0,0);
+}
+document.querySelectorAll('.nav button[data-s]').forEach(function(b){
+  b.addEventListener('click', function(){ go(b.dataset.s); });
+});
+function tabs(barId, prefix, cls){
+  var bar=document.getElementById(barId); if(!bar) return;
+  bar.querySelectorAll('button[data-t]').forEach(function(b){
+    b.addEventListener('click', function(){
+      bar.querySelectorAll('button').forEach(function(x){x.setAttribute('aria-current','false');});
+      b.setAttribute('aria-current','true');
+      document.querySelectorAll('.'+cls).forEach(function(p){p.classList.toggle('on', p.id===prefix+b.dataset.t);});
+    });
+  });
+}
+tabs('sitetabs','t-','sitetab');
+tabs('labtabs','t-','labtab');
+function mth(row){
+  var d=row.nextElementSibling.querySelector('.maths');
+  if(d) d.classList.toggle('open');
+}
+function mth2(btn){
+  var d=btn.closest('.qcard').querySelector('.maths');
+  if(d) d.classList.toggle('open');
+}
+document.querySelectorAll('.tree button').forEach(function(b){
+  b.addEventListener('click', function(){
+    document.querySelectorAll('.tree button').forEach(function(x){x.setAttribute('aria-current','false');});
+    b.setAttribute('aria-current','true');
+  });
+});
+document.querySelectorAll('.canvas .qi').forEach(function(b){
+  b.addEventListener('click', function(){
+    document.querySelectorAll('.canvas .qi').forEach(function(x){x.setAttribute('aria-current','false');});
+    b.setAttribute('aria-current','true');
+  });
+});
+</script>
+</body>
+</html>

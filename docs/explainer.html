@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>How a mockup becomes a real app</title>
+<style>
+:root{--plane:#f9f9f7;--surface:#fcfcfb;--ink:#0b0b0b;--ink2:#52514e;--muted:#898781;
+--grid:#e1e0d9;--axis:#c3c2b7;--border:rgba(11,11,11,.10);
+--s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--s4:#eda100;--s5:#e87ba4;--s7:#4a3aa7;
+--good:#0ca30c;--warn:#fab219;--crit:#d03b3b;--track:#e8e7e1}
+html[data-theme="dark"]{--plane:#0d0d0d;--surface:#1a1a19;--ink:#fff;--ink2:#c3c2b7;--muted:#898781;
+--grid:#2c2c2a;--axis:#383835;--border:rgba(255,255,255,.10);
+--s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#c98500;--s5:#d55181;--s7:#9085e9;--track:#2c2c2a}
+*{box-sizing:border-box}
+body{margin:0;background:var(--plane);color:var(--ink);font:16px/1.65 system-ui,-apple-system,"Segoe UI",sans-serif}
+.wrap{max-width:860px;margin:0 auto;padding:38px 22px 90px}
+.theme{position:fixed;top:14px;right:14px;background:var(--surface);border:1px solid var(--border);
+border-radius:8px;padding:6px 11px;font:inherit;font-size:13px;color:var(--ink2);cursor:pointer;z-index:9}
+h1{font-size:31px;line-height:1.2;margin:0 0 8px;letter-spacing:-.02em}
+.lede{font-size:17px;color:var(--ink2);margin:0 0 12px}
+h2{font-size:21px;margin:52px 0 6px;letter-spacing:-.01em}
+h2 .n{display:inline-grid;place-items:center;width:27px;height:27px;border-radius:50%;background:var(--s1);
+color:#fff;font-size:14px;font-weight:700;margin-right:10px;vertical-align:2px}
+h3{font-size:16px;margin:26px 0 6px}
+p{margin:12px 0}
+.sub{color:var(--muted);font-size:14.5px;margin:0 0 20px}
+b,strong{font-weight:650}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:20px 22px;margin:18px 0}
+.key{border-left:3px solid var(--s1)}
+.warnbox{border-left:3px solid var(--warn)}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px}
+/* two-panel compare */
+.cmp{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:20px 0}
+.cmp>div{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:18px}
+.cmp h4{margin:0 0 4px;font-size:14.5px}
+.cmp .tag{font-size:11px;text-transform:uppercase;letter-spacing:.07em;font-weight:700;margin-bottom:9px;display:block}
+.cmp .no .tag{color:var(--crit)} .cmp .yes .tag{color:var(--good)}
+.cmp ul{margin:10px 0 0;padding-left:19px;font-size:14px;color:var(--ink2);line-height:1.85}
+/* shop table */
+table{width:100%;border-collapse:collapse;margin:16px 0;font-size:14.5px}
+th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);
+font-weight:700;padding:0 12px 9px;border-bottom:1px solid var(--grid)}
+td{padding:14px 12px;border-bottom:1px solid var(--grid);vertical-align:top}
+td b{display:block;margin-bottom:2px}
+td .d{font-size:13px;color:var(--ink2)}
+.free{color:var(--good);font-weight:700;font-size:13px;white-space:nowrap}
+/* three pieces */
+.pieces{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:22px 0}
+.pc{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:20px;text-align:center}
+.pc .ic{font-size:30px;line-height:1;margin-bottom:12px}
+.pc h4{margin:0 0 3px;font-size:15px}
+.pc .who{font-size:12px;color:var(--s1);font-weight:700;letter-spacing:.02em;margin-bottom:9px}
+.pc p{font-size:13.5px;color:var(--ink2);margin:0;line-height:1.6}
+/* journey */
+.jrn{counter-reset:j;margin:20px 0}
+.jr{display:flex;gap:15px;padding:15px 0;border-bottom:1px solid var(--grid);align-items:flex-start}
+.jr:last-child{border-bottom:0}
+.jr .jn{counter-increment:j;flex:none;width:26px;height:26px;border-radius:50%;background:var(--track);
+color:var(--ink2);display:grid;place-items:center;font-size:12px;font-weight:700}
+.jr .jn::before{content:counter(j)}
+.jr b{display:block;font-size:14.5px;margin-bottom:2px}
+.jr p{margin:0;font-size:14px;color:var(--ink2)}
+.jr .tag2{font-size:11px;font-weight:700;color:var(--s1);letter-spacing:.03em}
+/* timeline */
+.tl{margin:22px 0}
+.tw{display:grid;grid-template-columns:64px 1fr 96px;gap:14px;align-items:center;
+padding:12px 0;border-bottom:1px solid var(--grid);font-size:14.5px}
+.tw:last-child{border-bottom:0}
+.tw .wk{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.tw .bar{height:9px;border-radius:5px;background:var(--s1);position:relative}
+.tw .bar.b2{background:var(--s3)} .tw .bar.b3{background:var(--s4)}
+.tw .lb{font-size:13.5px;color:var(--ink2);text-align:right}
+.tw .t{font-weight:600}
+/* callout */
+.big{font-size:19px;line-height:1.5;font-weight:600;margin:0}
+.q{font-size:14px;color:var(--muted);margin:0 0 6px;text-transform:uppercase;letter-spacing:.06em;font-weight:700}
+ul.plain{padding-left:20px;color:var(--ink2);font-size:15px;line-height:1.9;margin:12px 0}
+ul.plain b{color:var(--ink)}
+.pill{display:inline-block;font-size:11.5px;font-weight:700;padding:2px 9px;border-radius:20px;
+border:1px solid var(--border);color:var(--ink2)}
+.pill.g{color:var(--good)} .pill.r{color:var(--crit)}
+hr{border:0;border-top:1px solid var(--grid);margin:44px 0}
+@media(max-width:680px){.cmp,.pieces{grid-template-columns:1fr}.tw{grid-template-columns:52px 1fr;}.tw .lb{display:none}}
+</style></head>
+<body>
+<button class="theme" onclick="var h=document.documentElement;h.dataset.theme=h.dataset.theme==='dark'?'light':'dark'">◐ Theme</button>
+<div class="wrap">
+
+<h1>How your mockup becomes something people can actually use</h1>
+<p class="lede">No jargon. Five sections. Read it top to bottom.</p>
+
+<hr>
+
+<h2><span class="n">1</span>What you have right now</h2>
+<p class="sub">And why it isn't an app yet</p>
+
+<div class="cmp">
+  <div class="no">
+    <span class="tag">✕ What you have</span>
+    <h4>A drawing of an app</h4>
+    <ul>
+      <li>Looks exactly right</li>
+      <li>You can click between screens</li>
+      <li>Every number is typed in by hand</li>
+      <li>Nothing is saved — refresh and it's gone</li>
+      <li>There's no login</li>
+      <li>Only you can see it</li>
+    </ul>
+  </div>
+  <div class="yes">
+    <span class="tag">✓ What you need</span>
+    <h4>A working app</h4>
+    <ul>
+      <li>Looks the same</li>
+      <li>Anyone can open it from a link</li>
+      <li>Numbers are calculated from what people type</li>
+      <li>Everything is remembered, forever</li>
+      <li>People sign in and see only their own data</li>
+      <li>The whole world can use it at once</li>
+    </ul>
+  </div>
+</div>
+
+<div class="card key">
+<p class="big">A mockup is a photograph of a car. An app is a car.</p>
+<p style="margin:10px 0 0;color:var(--ink2);font-size:15px">They look the same from the outside. Everything that makes one of them go is missing from the other.</p>
+</div>
+
+<hr>
+
+<h2><span class="n">2</span>A real app is only three things</h2>
+<p class="sub">Genuinely. Everything else is a detail hanging off one of these.</p>
+
+<div class="pieces">
+  <div class="pc"><div class="ic">🏠</div>
+    <h4>Somewhere to live</h4><div class="who">Vercel</div>
+    <p>A computer, always switched on, that sends your pages to anyone who asks.</p></div>
+  <div class="pc"><div class="ic">🗄️</div>
+    <h4>Somewhere to remember</h4><div class="who">Neon</div>
+    <p>A database. When someone types “14,200 litres”, this is what keeps it.</p></div>
+  <div class="pc"><div class="ic">🔑</div>
+    <h4>A way to know who's who</h4><div class="who">Auth.js</div>
+    <p>Login. So your data is yours and mine is mine.</p></div>
+</div>
+
+<h3>The same idea, as a shop</h3>
+<table>
+<thead><tr><th>You need</th><th>If it were a shop</th><th>What it's called</th><th>Cost</th></tr></thead>
+<tbody>
+<tr><td><b>Somewhere to live</b><span class="d">Always open, anyone can walk in</span></td>
+    <td class="d">The premises you rent</td><td><b>Vercel</b><span class="d">a hosting company</span></td><td class="free">FREE</td></tr>
+<tr><td><b>Somewhere to remember</b><span class="d">Survives being switched off</span></td>
+    <td class="d">The filing cabinet out back</td><td><b>Neon</b><span class="d">a database company</span></td><td class="free">FREE</td></tr>
+<tr><td><b>Who's who</b><span class="d">Customers vs staff vs strangers</span></td>
+    <td class="d">Door key and staff badges</td><td><b>Auth.js</b><span class="d">login code in your app</span></td><td class="free">FREE</td></tr>
+<tr><td><b>Somewhere for boxes</b><span class="d">Invoices, PDFs people upload</span></td>
+    <td class="d">The stockroom</td><td><b>Cloudflare R2</b><span class="d">file storage</span></td><td class="free">FREE</td></tr>
+<tr><td><b>The master copy</b><span class="d">So you can undo mistakes</span></td>
+    <td class="d">The safe with the deeds in it</td><td><b>GitHub</b><span class="d">where your code lives</span></td><td class="free">FREE</td></tr>
+</tbody></table>
+
+<div class="card">
+<p class="q">The bit worth remembering</p>
+<p style="margin:0;font-size:15.5px">These are five separate companies, each doing one job, each free at your size. You don't buy “a server”. You rent five small services and wire them together. That's just how software is built now — it's why one person can put a real product online for nothing.</p>
+</div>
+
+<hr>
+
+<h2><span class="n">3</span>What happens when someone clicks your link</h2>
+<p class="sub">Follow one person, one click, all the way through</p>
+
+<div class="card"><div class="jrn">
+<div class="jr"><span class="jn"></span><div><b>Someone taps your link on LinkedIn</b>
+<p>Their phone asks the internet: “where is greenledger.app?”</p></div></div>
+<div class="jr"><span class="jn"></span><div><b>Vercel answers</b><span class="tag2">SOMEWHERE TO LIVE</span>
+<p>Your code is sitting on Vercel's computers. It wakes up and starts building the page.</p></div></div>
+<div class="jr"><span class="jn"></span><div><b>Your code asks the database a question</b><span class="tag2">SOMEWHERE TO REMEMBER</span>
+<p>“Which sites belong to this person, and how complete is each one?” Neon looks it up and answers.</p></div></div>
+<div class="jr"><span class="jn"></span><div><b>The page is assembled and sent</b>
+<p>Real numbers, from the database, dropped into the design you already made. Under a second.</p></div></div>
+<div class="jr"><span class="jn"></span><div><b>They type 14,200 litres of diesel and hit save</b>
+<p>It goes back to Vercel, which does the sum — 14,200 × 2.68 — and tells Neon to write it down.</p></div></div>
+<div class="jr"><span class="jn"></span><div><b>It's there forever</b>
+<p>They close the laptop. Come back in March. It's still 14,200 litres and still 38.06 tonnes.</p></div></div>
+</div></div>
+
+<p><b>That's the whole thing.</b> Your mockup already does step 4 — it shows a page. It just shows made-up numbers instead of real ones. Steps 3 and 5 are the work.</p>
+
+<hr>
+
+<h2><span class="n">4</span>What “free” actually means</h2>
+<p class="sub">There is no catch, but there are edges</p>
+
+<p>These companies give away a small amount for nothing, betting that if you grow, you'll pay them later. You get a <b>real, public, working website</b> — not a trial, not a watermark. Just with a ceiling.</p>
+
+<div class="card">
+<p class="q">Roughly what you get for £0</p>
+<ul class="plain">
+<li><b>A few thousand people</b> can try your tool per month</li>
+<li><b>About half a gigabyte</b> of saved data — thousands of records</li>
+<li><b>10 GB</b> of uploaded files</li>
+<li><b>Your own web address</b>, if you buy one — about £10–30 a year, the only real money here</li>
+</ul>
+<p style="margin:12px 0 0;font-size:14.5px;color:var(--ink2)">A LinkedIn post won't come close to those limits. If it somehow does, that's the good problem, and the fix is about $40/month.</p>
+</div>
+
+<h3>Two edges to know about</h3>
+
+<div class="card warnbox">
+<p style="margin:0 0 6px"><span class="pill r">EDGE 1</span> &nbsp;<b>Vercel's free plan doesn't allow making money</b></p>
+<p style="margin:0;font-size:15px;color:var(--ink2)">A free demo anyone can try: <b>fine</b>. Charging for it, running ads, or even a donate button: <b>not allowed on free</b> — that's $20/month. Nothing breaks by accident; just know where the line is before you cross it.</p>
+</div>
+
+<div class="card warnbox">
+<p style="margin:0 0 6px"><span class="pill r">EDGE 2</span> &nbsp;<b>Some free databases fall asleep and don't wake up</b></p>
+<p style="margin:0;font-size:15px;color:var(--ink2)">Supabase — a popular choice — <b>shuts down a free database after a week with no visitors</b>. You post your link in September; someone clicks it in November; your site is broken and you don't know. Neon naps after 5 minutes but wakes up instantly on the next visitor. That single difference is the whole reason I picked Neon.</p>
+</div>
+
+<hr>
+
+<h2><span class="n">5</span>How long, and in what order</h2>
+<p class="sub">Being honest with you: this is real software, not a template</p>
+
+<div class="card"><div class="tl">
+<div class="tw"><span class="wk">Wk 1</span><div class="bar" style="width:34%"></div><span class="lb">nothing to see</span></div>
+<div class="tw"><span class="wk"></span><div><span class="t">Build the filing cabinet</span> <span style="color:var(--ink2);font-size:13.5px">— tell the database what a Site, an Asset, a Question is</span></div><span class="lb"></span></div>
+<div class="tw"><span class="wk">Wk 1</span><div class="bar" style="width:12%"></div><span class="lb">a live URL 🎉</span></div>
+<div class="tw"><span class="wk"></span><div><span class="t">Put a blank page online</span> <span style="color:var(--ink2);font-size:13.5px">— do this on day one, before anything works</span></div><span class="lb"></span></div>
+<div class="tw"><span class="wk">Wk 2</span><div class="bar b2" style="width:42%"></div><span class="lb">you can sign in</span></div>
+<div class="tw"><span class="wk"></span><div><span class="t">Login + keeping companies separate</span></div><span class="lb"></span></div>
+<div class="tw"><span class="wk">Wk 3</span><div class="bar b2" style="width:56%"></div><span class="lb">screens appear</span></div>
+<div class="tw"><span class="wk"></span><div><span class="t">Sites, Assets, the Factor Lab</span></div><span class="lb"></span></div>
+<div class="tw"><span class="wk">Wk 4–5</span><div class="bar b3" style="width:82%"></div><span class="lb">the good part</span></div>
+<div class="tw"><span class="wk"></span><div><span class="t">The Builder and the questionnaire</span> <span style="color:var(--ink2);font-size:13.5px">— what people will screenshot</span></div><span class="lb"></span></div>
+<div class="tw"><span class="wk">Wk 6</span><div class="bar b3" style="width:96%"></div><span class="lb">shareable</span></div>
+<div class="tw"><span class="wk"></span><div><span class="t">Real numbers, “show the maths”, demo mode</span></div><span class="lb"></span></div>
+</div></div>
+
+<p><b>Five to seven weeks, working evenings and weekends.</b> Faster if you use Claude Code to write it — that's what it's for — but you still have to review every piece, because you're the one who understands what the numbers mean.</p>
+
+<div class="card key">
+<p class="q">The shortcut, if the goal is just “does anyone want this?”</p>
+<p style="margin:0;font-size:15.5px">Build the <b>Builder</b> and the <b>questionnaire</b> and <b>“show the maths”</b>. Fake the dashboard with static numbers. That's about three weeks and it tells a complete story — someone can map a question to a factor, answer it, and watch a real emission number appear with the arithmetic exposed. Dashboards and exports impress nobody; that does.</p>
+</div>
+
+<hr>
+
+<h2><span class="n">6</span>One more thing, and it matters more than you'd think</h2>
+
+<p>Nobody signs up for a stranger's tool. If your LinkedIn link lands on a login form, almost everyone leaves.</p>
+
+<p>So build a <b>“Try it” button that skips signup entirely</b>. It hands the visitor a private practice copy, already filled with a realistic example company — a few sites, some finished, some half-done, a couple of deliberately broken things so there's something to fix. They poke around, break whatever they like, and it wipes itself clean overnight.</p>
+
+<div class="card">
+<p style="margin:0;font-size:15.5px"><b>An empty product demos terribly.</b> The single highest-value day of work in this whole project is the one where you write realistic fake data for that practice copy. More people will judge your tool on that than on any code you write.</p>
+</div>
+
+</div></body></html>

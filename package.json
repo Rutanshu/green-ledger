@@ -6,21 +6,44 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:cov": "vitest run --coverage",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:push": "prisma db push",
+    "db:studio": "prisma studio",
+    "db:seed": "tsx prisma/seed.ts",
+    "schema:validate": "node scripts/validate-schema.cjs",
+    "verify": "npm run schema:validate && npm run typecheck && npm run test"
   },
   "dependencies": {
+    "@prisma/client": "^6.19.3",
+    "decimal.js": "^10.6.0",
     "next": "16.3.1",
+    "prisma": "^6.19.3",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@prisma/internals": "^6.19.3",
+    "@prisma/prisma-schema-wasm": "^6.20.0-18.802783d6296a271b2d26062832ec559ce79af320",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vitest/coverage-v8": "^4.1.11",
     "eslint": "^9",
     "eslint-config-next": "16.3.1",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "tsx": "^4.23.12",
+    "typescript": "^5",
+    "vitest": "^4.1.11"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   }
 }

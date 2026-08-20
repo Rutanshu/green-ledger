@@ -1,0 +1,985 @@
+// Green Ledger — data model. See SPEC.md §3.
+// RULE: codes are stable and machine-readable; labels are org-owned (LabelOverride).
+// RULE: EmissionRecord snapshots every input so past reports never silently change.
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─────────────────────────────── enums (closed taxonomies) ───────────────────────────────
+// These are defined by the GHG Protocol / ESRS. They can be RELABELLED but never extended.
+
+enum Scope {
+  SCOPE_1
+  SCOPE_2
+  SCOPE_3
+}
+
+enum ActivityType {
+  STATIONARY_COMBUSTION
+  MOBILE_COMBUSTION
+  FUGITIVE
+  PROCESS
+  PURCHASED_ELECTRICITY
+  PURCHASED_HEAT
+  PURCHASED_STEAM
+  PURCHASED_COOLING
+  SPEND
+  DISTANCE
+  MASS
+  WASTE
+  OTHER
+}
+
+enum CalcMethod {
+  FUEL_BASED
+  DISTANCE_BASED
+  SPEND_BASED
+  AVERAGE_DATA
+  SUPPLIER_SPECIFIC
+  WASTE_TYPE_SPECIFIC
+  MATERIAL_BASED
+  HYBRID
+}
+
+enum Gas {
+  CO2
+  CH4
+  N2O
+  HFC
+  PFC
+  SF6
+  NF3
+  CO2E_BLENDED
+}
+
+enum EmissionBasis {
+  LOCATION_BASED
+  MARKET_BASED
+  SINGLE
+}
+
+enum DataQuality {
+  MEASURED
+  CALCULATED
+  ESTIMATED
+  PROXY
+}
+
+enum ConsolidationApproach {
+  OPERATIONAL_CONTROL
+  FINANCIAL_CONTROL
+  EQUITY_SHARE
+}
+
+enum PeriodStatus {
+  DRAFT
+  IN_REVIEW
+  LOCKED
+  ASSURED
+}
+
+enum RecordStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+enum AnswerStatus {
+  UNANSWERED
+  DRAFT
+  ANSWERED
+  FLAGGED
+  APPROVED
+}
+
+enum AssignmentStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  IN_REVIEW
+  APPROVED
+  LOCKED
+}
+
+enum TemplateStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum BindingHealth {
+  OK
+  FALLBACK_REGION
+  AMBIGUOUS
+  BROKEN
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  CONTRIBUTOR
+  APPROVER
+  AUDITOR
+}
+
+enum AssetCategory {
+  STATIONARY_COMBUSTION
+  MOBILE_COMBUSTION
+  REFRIGERATION
+  PROCESS
+  ON_SITE_GENERATION
+  ELECTRICAL
+  WASTE_HANDLING
+  IT_EQUIPMENT
+  OTHER
+}
+
+enum AssetStatus {
+  ACTIVE
+  STANDBY
+  DECOMMISSIONED
+}
+
+enum InputType {
+  NUMBER_WITH_UNIT
+  NUMBER
+  TEXT
+  SINGLE_SELECT
+  MULTI_SELECT
+  DATE
+  DATE_RANGE
+  BOOLEAN
+  FILE
+  REPEATING_TABLE
+}
+
+enum UnitDimension {
+  VOLUME
+  MASS
+  ENERGY
+  DISTANCE
+  MASS_DISTANCE
+  PASSENGER_DISTANCE
+  CURRENCY
+  EMISSIONS
+  COUNT
+}
+
+enum UnitCode {
+  // volume
+  L
+  M3
+  GAL_US
+  GAL_UK
+  // mass
+  G
+  KG
+  TONNE
+  LB
+  // energy
+  KWH
+  MWH
+  GJ
+  MJ
+  THERM
+  MMBTU
+  // distance
+  KM
+  MI
+  NM
+  // composite
+  TONNE_KM
+  KG_KM
+  PASSENGER_KM
+  // currency
+  GBP
+  EUR
+  USD
+  INR
+  CAD
+  // emissions
+  KG_CO2E
+  T_CO2E
+  KG_CO2
+  KG_CH4
+  KG_N2O
+  // dimensionless
+  UNIT
+}
+
+enum RegionStrategy {
+  SITE_COUNTRY_THEN_GRID_THEN_GLOBAL
+  SITE_GRID_ONLY
+  FIXED_REGION
+  GLOBAL_ONLY
+}
+
+enum FactorSetMode {
+  PERIOD_DEFAULT
+  PINNED
+}
+
+enum GwpSetMode {
+  ORG_DEFAULT
+  PINNED
+}
+
+enum OutputBasis {
+  SINGLE
+  DUAL
+}
+
+enum VocabularyKind {
+  SITE_TYPE
+  ASSET_TYPE
+  ASSET_CATEGORY
+  DOCUMENT_TYPE
+  DENOMINATOR
+  FUEL_OR_MATERIAL
+}
+
+enum LabelEntityKind {
+  SCOPE
+  SCOPE3_CATEGORY
+  ACTIVITY_TYPE
+  METHOD
+  ASSET_TYPE
+  ASSET_CATEGORY
+  SITE_TYPE
+  FUEL_OR_MATERIAL
+  UNIT
+  DATA_QUALITY
+  STATUS
+  SECTION
+  QUESTION
+  DENOMINATOR
+  ROLE
+  DOCUMENT_TYPE
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOCK
+  UNLOCK
+  APPROVE
+  REJECT
+  RECALCULATE
+  EXPORT
+  LOGIN
+  IMPORT
+  RESTATE
+}
+
+enum DocumentType {
+  INVOICE
+  METER_READ
+  CONTRACT
+  EAC_CERTIFICATE
+  METHODOLOGY
+  ASSURANCE
+  OTHER
+}
+
+enum TaskStatus {
+  OPEN
+  IN_PROGRESS
+  BLOCKED
+  DONE
+}
+
+enum TargetType {
+  ABSOLUTE
+  INTENSITY
+}
+
+enum ReportFormat {
+  XLSX
+  PDF
+  JSON
+  CSV
+}
+
+enum ImportStatus {
+  PENDING
+  DRY_RUN
+  COMMITTED
+  FAILED
+  REVERTED
+}
+
+// ─────────────────────────────── identity ───────────────────────────────
+
+model User {
+  id            String       @id @default(uuid())
+  email         String       @unique
+  name          String?
+  image         String?
+  emailVerified DateTime?
+  createdAt     DateTime     @default(now())
+  memberships   Membership[]
+
+  @@map("users")
+}
+
+model Organization {
+  id                    String                @id @default(uuid())
+  legalName             String                @map("legal_name")
+  consolidationApproach ConsolidationApproach  @default(OPERATIONAL_CONTROL) @map("consolidation_approach")
+  baseYear              Int?                  @map("base_year")
+  baseYearRationale     String?               @map("base_year_rationale")
+  defaultGwpSetId       String?               @map("default_gwp_set_id")
+  fiscalYearStartMonth  Int                   @default(1) @map("fiscal_year_start_month")
+  locale                String                @default("en-GB")
+  isSandbox             Boolean               @default(false) @map("is_sandbox")
+  sandboxExpiresAt      DateTime?             @map("sandbox_expires_at")
+  createdAt             DateTime              @default(now()) @map("created_at")
+  updatedAt             DateTime              @updatedAt @map("updated_at")
+
+  memberships     Membership[]
+  sites           Site[]
+  periods         ReportingPeriod[]
+  factorSets      EmissionFactorSet[]
+  templates       QuestionnaireTemplate[]
+  documents       Document[]
+  tasks           Task[]
+  auditEvents     AuditEvent[]
+  targets         Target[]
+  reports         Report[]
+  labelOverrides  LabelOverride[]
+  vocabulary      VocabularyEntry[]
+  fuelProperties  FuelProperty[]
+  importBatches   ImportBatch[]
+
+  @@index([isSandbox, sandboxExpiresAt])
+  @@map("organizations")
+}
+
+model Membership {
+  id             String       @id @default(uuid())
+  userId         String       @map("user_id")
+  organizationId String       @map("organization_id")
+  role           Role         @default(CONTRIBUTOR)
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+  @@index([organizationId])
+  @@map("memberships")
+}
+
+// ─────────────────────────────── org vocabulary + labels ───────────────────────────────
+
+/// Open code lists an org can extend. Org-created codes are prefixed `org_`.
+model VocabularyEntry {
+  id             String         @id @default(uuid())
+  organizationId String?        @map("organization_id") // null = system-seeded
+  kind           VocabularyKind
+  code           String
+  label          String
+  description    String?
+  parentCode     String?        @map("parent_code")
+  metadata       Json?
+  sortOrder      Int            @default(0) @map("sort_order")
+  isActive       Boolean        @default(true) @map("is_active")
+  createdAt      DateTime       @default(now()) @map("created_at")
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, kind, code])
+  @@index([kind, isActive])
+  @@map("vocabulary_entries")
+}
+
+/// The org's own word for any system code. Resolution: binding > question > template
+/// > site_type > org > system default. Changing a label can never change a number.
+model LabelOverride {
+  id             String          @id @default(uuid())
+  organizationId String          @map("organization_id")
+  entityKind     LabelEntityKind @map("entity_kind")
+  code           String
+  /// `binding:<id>` | `question:<id>` | `template:<id>` | `site_type:<code>` | `org`
+  scopeKey       String          @default("org") @map("scope_key")
+  label          String
+  shortLabel     String?         @map("short_label")
+  description    String?
+  locale         String          @default("*")
+  isHidden       Boolean         @default(false) @map("is_hidden")
+  sortOrder      Int?            @map("sort_order")
+  updatedById    String?         @map("updated_by_id")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, entityKind, code, scopeKey, locale])
+  @@index([organizationId, entityKind])
+  @@map("label_overrides")
+}
+
+// ─────────────────────────────── sites ───────────────────────────────
+
+model Site {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  name           String
+  code           String
+  legalEntity    String?  @map("legal_entity")
+  costCentre     String?  @map("cost_centre")
+  address        String?
+  city           String?
+  region         String?
+  country        String   // ISO 3166-1 alpha-2
+  gridRegion     String?  @map("grid_region")
+  timezone       String?
+  /// code from the SITE_TYPE vocabulary
+  siteType       String   @map("site_type")
+  ownership      String?
+  floorAreaM2    Decimal? @map("floor_area_m2") @db.Decimal(20, 6)
+  headcountFte   Decimal? @map("headcount_fte") @db.Decimal(20, 6)
+  annualRevenue  Decimal? @map("annual_revenue") @db.Decimal(20, 2)
+  revenueCurrency UnitCode? @map("revenue_currency")
+  /// org-defined denominators: { "org_units_produced": 1420000 }
+  denominators   Json?
+  parentSiteId   String?  @map("parent_site_id")
+  inScopeFrom    DateTime? @map("in_scope_from") @db.Date
+  inScopeTo      DateTime? @map("in_scope_to") @db.Date
+  dataOwnerId    String?  @map("data_owner_id")
+  approverId     String?  @map("approver_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization    Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  parentSite      Site?                  @relation("SiteHierarchy", fields: [parentSiteId], references: [id])
+  childSites      Site[]                 @relation("SiteHierarchy")
+  assets          SiteAsset[]
+  ownershipPeriods SiteOwnershipPeriod[]
+  activityRecords ActivityRecord[]
+  assignments     QuestionnaireAssignment[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId, siteType])
+  @@map("sites")
+}
+
+model SiteOwnershipPeriod {
+  id                 String   @id @default(uuid())
+  siteId             String   @map("site_id")
+  validFrom          DateTime @map("valid_from") @db.Date
+  validTo            DateTime? @map("valid_to") @db.Date
+  consolidationShare Decimal  @default(1) @map("consolidation_share") @db.Decimal(9, 6)
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([siteId, validFrom])
+  @@map("site_ownership_periods")
+}
+
+/// What physically exists at a site. Drives which questions appear (Question.visibleIf).
+model SiteAsset {
+  id                  String        @id @default(uuid())
+  organizationId      String        @map("organization_id")
+  siteId              String        @map("site_id")
+  name                String
+  /// code from the ASSET_TYPE vocabulary
+  assetTypeCode       String        @map("asset_type_code")
+  category            AssetCategory
+  fuelOrMaterialCode  String?       @map("fuel_or_material_code")
+  capacity            Decimal?      @db.Decimal(20, 6)
+  capacityUnit        UnitCode?     @map("capacity_unit")
+  capacityNote        String?       @map("capacity_note")
+  quantity            Int           @default(1)
+  refrigerantChargeKg Decimal?      @map("refrigerant_charge_kg") @db.Decimal(20, 6)
+  subLocation         String?       @map("sub_location")
+  tagOrSerial         String?       @map("tag_or_serial")
+  commissionedOn      DateTime?     @map("commissioned_on") @db.Date
+  decommissionedOn    DateTime?     @map("decommissioned_on") @db.Date
+  status              AssetStatus   @default(ACTIVE)
+  notes               String?
+  createdAt           DateTime      @default(now()) @map("created_at")
+  updatedAt           DateTime      @updatedAt @map("updated_at")
+
+  site            Site             @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  activityRecords ActivityRecord[]
+
+  @@index([siteId, category])
+  @@index([organizationId, assetTypeCode])
+  @@map("site_assets")
+}
+
+// ─────────────────────────────── periods ───────────────────────────────
+
+model ReportingPeriod {
+  id                  String       @id @default(uuid())
+  organizationId      String       @map("organization_id")
+  label               String
+  startsOn            DateTime     @map("starts_on") @db.Date
+  endsOn              DateTime     @map("ends_on") @db.Date
+  status              PeriodStatus @default(DRAFT)
+  defaultFactorSetId  String?      @map("default_factor_set_id")
+  lockedAt            DateTime?    @map("locked_at")
+  lockedById          String?      @map("locked_by_id")
+  unlockReason        String?      @map("unlock_reason")
+  createdAt           DateTime     @default(now()) @map("created_at")
+
+  organization    Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  defaultFactorSet EmissionFactorSet?       @relation(fields: [defaultFactorSetId], references: [id])
+  activityRecords ActivityRecord[]
+  assignments     QuestionnaireAssignment[]
+  reports         Report[]
+
+  @@unique([organizationId, label])
+  @@map("reporting_periods")
+}
+
+// ─────────────────────────────── factors ───────────────────────────────
+
+model EmissionFactorSet {
+  id             String   @id @default(uuid())
+  organizationId String?  @map("organization_id") // null = shared/global set
+  publisher      String
+  name           String
+  version        String
+  publishedOn    DateTime? @map("published_on") @db.Date
+  regionScope    String?  @map("region_scope")
+  licence        String?
+  sourceUrl      String?  @map("source_url")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization Organization?     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  factors      EmissionFactor[]
+  periods      ReportingPeriod[]
+  bindings     FactorBinding[]
+
+  @@unique([organizationId, publisher, name, version])
+  @@map("emission_factor_sets")
+}
+
+/// Immutable once referenced. Corrections create a new row with a new validFrom.
+model EmissionFactor {
+  id                String        @id @default(uuid())
+  factorSetId       String        @map("factor_set_id")
+  scope             Scope
+  scope3Category    Int?          @map("scope3_category")
+  activityType      ActivityType  @map("activity_type")
+  method            CalcMethod
+  fuelOrMaterialCode String       @map("fuel_or_material_code")
+  region            String        @default("GLOBAL")
+  gas               Gas           @default(CO2E_BLENDED)
+  basis             EmissionBasis @default(SINGLE)
+  value             Decimal       @db.Decimal(24, 12)
+  unitNumerator     UnitCode      @map("unit_numerator")
+  unitDenominator   UnitCode      @map("unit_denominator")
+  /// for CURRENCY denominators — the price year the factor is expressed in
+  currencyYear      Int?          @map("currency_year")
+  validFrom         DateTime      @map("valid_from") @db.Date
+  validTo           DateTime?     @map("valid_to") @db.Date
+  sourceCitation    String        @map("source_citation")
+  uncertaintyPct    Decimal?      @map("uncertainty_pct") @db.Decimal(9, 4)
+  supersededById    String?       @unique @map("superseded_by_id")
+  createdAt         DateTime      @default(now()) @map("created_at")
+
+  factorSet     EmissionFactorSet @relation(fields: [factorSetId], references: [id], onDelete: Cascade)
+  supersededBy  EmissionFactor?   @relation("Supersession", fields: [supersededById], references: [id])
+  supersedes    EmissionFactor?   @relation("Supersession")
+  emissionRecords EmissionRecord[]
+
+  @@index([activityType, method, fuelOrMaterialCode, region, validFrom])
+  @@index([factorSetId])
+  @@map("emission_factors")
+}
+
+model GwpSet {
+  id        String   @id @default(uuid())
+  name      String
+  gas       Gas
+  gwp100    Decimal  @map("gwp_100") @db.Decimal(20, 6)
+  isDefault Boolean  @default(false) @map("is_default")
+
+  @@unique([name, gas])
+  @@map("gwp_sets")
+}
+
+/// Density / net calorific value. NOT a unit conversion — see SPEC.md §6.
+model FuelProperty {
+  id             String    @id @default(uuid())
+  organizationId String?   @map("organization_id")
+  fuelCode       String    @map("fuel_code")
+  property       String    // "density" | "ncv"
+  value          Decimal   @db.Decimal(24, 12)
+  fromUnit       UnitCode  @map("from_unit")
+  toUnit         UnitCode  @map("to_unit")
+  source         String
+  validFrom      DateTime  @map("valid_from") @db.Date
+  validTo        DateTime? @map("valid_to") @db.Date
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([fuelCode, property, validFrom])
+  @@map("fuel_properties")
+}
+
+// ─────────────────────────────── questionnaire ───────────────────────────────
+
+model QuestionnaireTemplate {
+  id                 String         @id @default(uuid())
+  organizationId     String         @map("organization_id")
+  name               String
+  version            Int            @default(1)
+  status             TemplateStatus @default(DRAFT)
+  appliesToSiteTypes String[]       @map("applies_to_site_types")
+  parentVersionId    String?        @map("parent_version_id")
+  publishedAt        DateTime?      @map("published_at")
+  publishedById      String?        @map("published_by_id")
+  createdAt          DateTime       @default(now()) @map("created_at")
+
+  organization Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sections     QuestionnaireSection[]
+  assignments  QuestionnaireAssignment[]
+
+  @@unique([organizationId, name, version])
+  @@map("questionnaire_templates")
+}
+
+model QuestionnaireSection {
+  id             String  @id @default(uuid())
+  templateId     String  @map("template_id")
+  title          String
+  description    String?
+  scope          Scope
+  scope3Category Int?    @map("scope3_category")
+  activityGroup  String? @map("activity_group")
+  sortOrder      Int     @default(0) @map("sort_order")
+  visibleIf      Json?   @map("visible_if")
+
+  template  QuestionnaireTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  questions Question[]
+
+  @@index([templateId, sortOrder])
+  @@map("questionnaire_sections")
+}
+
+model Question {
+  id                     String        @id @default(uuid())
+  sectionId              String        @map("section_id")
+  code                   String
+  label                  String
+  helpText               String?       @map("help_text")
+  inputType              InputType     @default(NUMBER_WITH_UNIT) @map("input_type")
+  unitDimension          UnitDimension? @map("unit_dimension")
+  allowedUnits           UnitCode[]    @map("allowed_units")
+  options                Json?
+  columns                Json?
+  isRequired             Boolean       @default(true) @map("is_required")
+  evidenceRequired       Boolean       @default(false) @map("evidence_required")
+  allowNotApplicable     Boolean       @default(true) @map("allow_not_applicable")
+  visibleIf              Json?         @map("visible_if")
+  prefillFromPriorPeriod Boolean       @default(true) @map("prefill_from_prior_period")
+  sortOrder              Int           @default(0) @map("sort_order")
+  libraryQuestionId      String?       @map("library_question_id")
+
+  section QuestionnaireSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  binding FactorBinding?
+  answers Answer[]
+
+  @@unique([sectionId, code])
+  @@index([sectionId, sortOrder])
+  @@map("questions")
+}
+
+/// Where the questionnaire meets the Factor Lab. A question with health BROKEN or
+/// AMBIGUOUS cannot be published — see SPEC.md §3.16.
+model FactorBinding {
+  id                 String         @id @default(uuid())
+  questionId         String         @unique @map("question_id")
+  scope              Scope
+  scope3Category     Int?           @map("scope3_category")
+  activityType       ActivityType   @map("activity_type")
+  method             CalcMethod
+  fuelOrMaterialCode String         @map("fuel_or_material_code")
+  regionStrategy     RegionStrategy @default(SITE_COUNTRY_THEN_GRID_THEN_GLOBAL) @map("region_strategy")
+  fixedRegion        String?        @map("fixed_region")
+  factorSetMode      FactorSetMode  @default(PERIOD_DEFAULT) @map("factor_set_mode")
+  pinnedFactorSetId  String?        @map("pinned_factor_set_id")
+  gwpSetMode         GwpSetMode     @default(ORG_DEFAULT) @map("gwp_set_mode")
+  pinnedGwpSetName   String?        @map("pinned_gwp_set_name")
+  outputBasis        OutputBasis    @default(SINGLE) @map("output_basis")
+  multiplier         Decimal        @default(1) @db.Decimal(20, 6)
+  columnBindings     Json?          @map("column_bindings")
+  health             BindingHealth  @default(OK)
+  healthCheckedAt    DateTime?      @map("health_checked_at")
+  healthMessage      String?        @map("health_message")
+
+  question         Question           @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  pinnedFactorSet  EmissionFactorSet? @relation(fields: [pinnedFactorSetId], references: [id])
+
+  @@index([health])
+  @@map("factor_bindings")
+}
+
+model QuestionnaireAssignment {
+  id                String           @id @default(uuid())
+  templateId        String           @map("template_id")
+  siteId            String           @map("site_id")
+  reportingPeriodId String           @map("reporting_period_id")
+  assignedToId      String?          @map("assigned_to_id")
+  approverId        String?          @map("approver_id")
+  dueOn             DateTime?        @map("due_on") @db.Date
+  status            AssignmentStatus @default(NOT_STARTED)
+  completenessPct   Decimal          @default(0) @map("completeness_pct") @db.Decimal(6, 2)
+  submittedAt       DateTime?        @map("submitted_at")
+  approvedAt        DateTime?        @map("approved_at")
+
+  template QuestionnaireTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  site     Site                  @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  period   ReportingPeriod       @relation(fields: [reportingPeriodId], references: [id], onDelete: Cascade)
+  answers  Answer[]
+
+  @@unique([siteId, reportingPeriodId, templateId])
+  @@index([reportingPeriodId, status])
+  @@map("questionnaire_assignments")
+}
+
+/// What a human typed. Projected into ActivityRecord by projectAnswer().
+model Answer {
+  id               String       @id @default(uuid())
+  assignmentId     String       @map("assignment_id")
+  questionId       String       @map("question_id")
+  valueNumeric     Decimal?     @map("value_numeric") @db.Decimal(20, 6)
+  valueText        String?      @map("value_text")
+  valueJson        Json?        @map("value_json")
+  unit             UnitCode?
+  dataQuality      DataQuality? @map("data_quality")
+  isNotApplicable  Boolean      @default(false) @map("is_not_applicable")
+  naReason         String?      @map("na_reason")
+  status           AnswerStatus @default(UNANSWERED)
+  answeredById     String?      @map("answered_by_id")
+  answeredAt       DateTime?    @map("answered_at")
+  documentIds      String[]     @map("document_ids")
+  priorPeriodValue Decimal?     @map("prior_period_value") @db.Decimal(20, 6)
+
+  assignment      QuestionnaireAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  question        Question                @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  activityRecords ActivityRecord[]
+
+  @@unique([assignmentId, questionId])
+  @@map("answers")
+}
+
+// ─────────────────────────────── activity + emissions ───────────────────────────────
+
+model ActivityRecord {
+  id                 String       @id @default(uuid())
+  organizationId     String       @map("organization_id")
+  siteId             String       @map("site_id")
+  reportingPeriodId  String       @map("reporting_period_id")
+  siteAssetId        String?      @map("site_asset_id")
+  answerId           String?      @map("answer_id")
+  scope              Scope
+  scope3Category     Int?         @map("scope3_category")
+  activityType       ActivityType @map("activity_type")
+  method             CalcMethod
+  quantity           Decimal      @db.Decimal(20, 6)
+  unit               UnitCode
+  activityStart      DateTime     @map("activity_start") @db.Date
+  activityEnd        DateTime     @map("activity_end") @db.Date
+  fuelOrMaterialCode String       @map("fuel_or_material_code")
+  supplierName       String?      @map("supplier_name")
+  supplierId         String?      @map("supplier_id")
+  dataQuality        DataQuality  @default(ESTIMATED) @map("data_quality")
+  uncertaintyPct     Decimal?     @map("uncertainty_pct") @db.Decimal(9, 4)
+  status             RecordStatus @default(DRAFT)
+  notes              String?
+  sourceDocumentIds  String[]     @map("source_document_ids")
+  importBatchId      String?      @map("import_batch_id")
+  restatesId         String?      @map("restates_id")
+  restatementReason  String?      @map("restatement_reason")
+  createdAt          DateTime     @default(now()) @map("created_at")
+  updatedAt          DateTime     @updatedAt @map("updated_at")
+
+  site            Site             @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  period          ReportingPeriod  @relation(fields: [reportingPeriodId], references: [id], onDelete: Cascade)
+  siteAsset       SiteAsset?       @relation(fields: [siteAssetId], references: [id])
+  answer          Answer?          @relation(fields: [answerId], references: [id])
+  importBatch     ImportBatch?     @relation(fields: [importBatchId], references: [id])
+  emissionRecords EmissionRecord[]
+
+  @@index([organizationId, reportingPeriodId, scope])
+  @@index([siteId, activityStart])
+  @@map("activity_records")
+}
+
+/// The computed result. EVERY input is snapshotted so past reports are reproducible
+/// forever, even after the referenced factor is superseded or deleted. See SPEC.md §3.5.
+model EmissionRecord {
+  id                    String        @id @default(uuid())
+  activityRecordId      String        @map("activity_record_id")
+  basis                 EmissionBasis @default(SINGLE)
+  gas                   Gas           @default(CO2E_BLENDED)
+
+  // --- snapshotted inputs ---
+  quantityNormalised    Decimal       @map("quantity_normalised") @db.Decimal(24, 12)
+  unitNormalised        UnitCode      @map("unit_normalised")
+  unitConversionFactor  Decimal       @map("unit_conversion_factor") @db.Decimal(24, 12)
+  factorId              String?       @map("factor_id")
+  factorValue           Decimal       @map("factor_value") @db.Decimal(24, 12)
+  factorUnitNumerator   UnitCode      @map("factor_unit_numerator")
+  factorUnitDenominator UnitCode      @map("factor_unit_denominator")
+  factorSource          String        @map("factor_source")
+  factorVersion         String        @map("factor_version")
+  factorValidFrom       DateTime      @map("factor_valid_from") @db.Date
+  factorValidTo         DateTime?     @map("factor_valid_to") @db.Date
+  gwpValue              Decimal       @map("gwp_value") @db.Decimal(20, 6)
+  gwpSet                String        @map("gwp_set")
+  consolidationShare    Decimal       @map("consolidation_share") @db.Decimal(9, 6)
+  /// days of the activity period this record covers (mid-year factor splits)
+  daysCovered           Int           @default(0) @map("days_covered")
+  daysTotal             Int           @default(0) @map("days_total")
+
+  // --- output ---
+  emissionsKgCo2e   Decimal  @map("emissions_kg_co2e") @db.Decimal(24, 6)
+  calculatedAt      DateTime @default(now()) @map("calculated_at")
+  calcEngineVersion String   @map("calc_engine_version")
+
+  activityRecord ActivityRecord  @relation(fields: [activityRecordId], references: [id], onDelete: Cascade)
+  factor         EmissionFactor? @relation(fields: [factorId], references: [id])
+
+  @@index([activityRecordId])
+  @@map("emission_records")
+}
+
+// ─────────────────────────────── supporting ───────────────────────────────
+
+model Document {
+  id             String       @id @default(uuid())
+  organizationId String       @map("organization_id")
+  storageKey     String       @map("storage_key")
+  filename       String
+  mimeType       String       @map("mime_type")
+  sizeBytes      Int          @map("size_bytes")
+  sha256         String
+  documentType   DocumentType @default(OTHER) @map("document_type")
+  entityType     String?      @map("entity_type")
+  entityId       String?      @map("entity_id")
+  uploadedById   String?      @map("uploaded_by_id")
+  uploadedAt     DateTime     @default(now()) @map("uploaded_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, entityType, entityId])
+  @@map("documents")
+}
+
+model Task {
+  id             String     @id @default(uuid())
+  organizationId String     @map("organization_id")
+  title          String
+  description    String?
+  assigneeId     String?    @map("assignee_id")
+  dueOn          DateTime?  @map("due_on") @db.Date
+  status         TaskStatus @default(OPEN)
+  priority       Int        @default(2)
+  entityType     String?    @map("entity_type")
+  entityId       String?    @map("entity_id")
+  createdById    String?    @map("created_by_id")
+  createdAt      DateTime   @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status, dueOn])
+  @@map("tasks")
+}
+
+/// Append-only. The app DB role has UPDATE and DELETE revoked on this table.
+model AuditEvent {
+  id             String      @id @default(uuid())
+  organizationId String      @map("organization_id")
+  actorUserId    String?     @map("actor_user_id")
+  occurredAt     DateTime    @default(now()) @map("occurred_at")
+  action         AuditAction
+  entityType     String      @map("entity_type")
+  entityId       String      @map("entity_id")
+  before         Json?
+  after          Json?
+  requestId      String?     @map("request_id")
+  ip             String?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, occurredAt])
+  @@index([entityType, entityId])
+  @@map("audit_events")
+}
+
+model Target {
+  id                  String     @id @default(uuid())
+  organizationId      String     @map("organization_id")
+  name                String
+  scopeCoverage       Json       @map("scope_coverage")
+  baseYear            Int        @map("base_year")
+  baseYearEmissionsKg Decimal    @map("base_year_emissions_kg") @db.Decimal(24, 6)
+  targetYear          Int        @map("target_year")
+  targetType          TargetType @default(ABSOLUTE) @map("target_type")
+  reductionPct        Decimal    @map("reduction_pct") @db.Decimal(9, 4)
+  isScienceBased      Boolean    @default(false) @map("is_science_based")
+  validatedBy         String?    @map("validated_by")
+  methodologyNote     String?    @map("methodology_note")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("targets")
+}
+
+/// Immutable. Regenerating creates a new row so versions can be compared.
+model Report {
+  id                String       @id @default(uuid())
+  organizationId    String       @map("organization_id")
+  reportingPeriodId String       @map("reporting_period_id")
+  reportType        String       @map("report_type")
+  format            ReportFormat @default(XLSX)
+  storageKey        String?      @map("storage_key")
+  sha256            String?
+  figuresSnapshot   Json         @map("figures_snapshot")
+  labelsSnapshot    Json?        @map("labels_snapshot")
+  factorSetsUsed    Json         @map("factor_sets_used")
+  calcEngineVersion String       @map("calc_engine_version")
+  generatedById     String?      @map("generated_by_id")
+  generatedAt       DateTime     @default(now()) @map("generated_at")
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  period       ReportingPeriod @relation(fields: [reportingPeriodId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, reportingPeriodId])
+  @@map("reports")
+}
+
+model ImportBatch {
+  id             String       @id @default(uuid())
+  organizationId String       @map("organization_id")
+  filename       String
+  sha256         String
+  rowCount       Int          @default(0) @map("row_count")
+  rowsAccepted   Int          @default(0) @map("rows_accepted")
+  rowsRejected   Int          @default(0) @map("rows_rejected")
+  status         ImportStatus @default(PENDING)
+  errorReportKey String?      @map("error_report_key")
+  uploadedById   String?      @map("uploaded_by_id")
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  activityRecords ActivityRecord[]
+
+  @@index([organizationId, status])
+  @@map("import_batches")
+}
