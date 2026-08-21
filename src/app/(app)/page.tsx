@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { getCurrentOrg } from "@/lib/demo-org";
-import { orgScopedClient } from "@/lib/db/tenant";
-import { rawPrisma } from "@/lib/db/client";
+import { orgScopedClient, withOrgTransaction } from "@/lib/db/tenant";
 import { toTonnes } from "@/lib/calc";
 import Decimal from "decimal.js";
 
@@ -28,11 +27,17 @@ async function getDashboardData() {
     }),
     // EmissionRecord has no organization_id of its own — scoped via its
     // ActivityRecord, same pattern as the QuestionnaireAssignment checks.
-    rawPrisma.emissionRecord.aggregate({
-      where: { activityRecord: { organizationId: org.id } },
-      _sum: { emissionsKgCo2e: true },
-      _count: true,
-    }),
+    // ActivityRecord has real RLS now, so this join needs app.org_id set —
+    // a bare rawPrisma call here silently sees nothing (found live: the
+    // Dashboard read 0 records right after the app switched to the
+    // RLS-restricted role, because this one query wasn't scoped).
+    withOrgTransaction(org.id, (tx) =>
+      tx.emissionRecord.aggregate({
+        where: { activityRecord: { organizationId: org.id } },
+        _sum: { emissionsKgCo2e: true },
+        _count: true,
+      }),
+    ),
   ]);
 
   const bindings = (template?.sections ?? [])
