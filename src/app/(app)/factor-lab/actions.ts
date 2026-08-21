@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { getCurrentOrg } from "@/lib/demo-org";
 import { orgScopedClient } from "@/lib/db/tenant";
-import { checkBindingHealth, type CandidateFactor } from "@/lib/factors";
+import { checkBindingHealth } from "@/lib/factors";
+import { buildFactorCandidates } from "@/lib/db/factor-candidates";
 
 export async function retestBinding(bindingId: string) {
   const org = await getCurrentOrg();
@@ -21,27 +22,7 @@ export async function retestBinding(bindingId: string) {
   ]);
   if (!site) return;
 
-  const candidates: CandidateFactor[] = factorSets.flatMap((set) =>
-    set.factors.map((f) => ({
-      id: f.id,
-      scope: f.scope,
-      scope3Category: f.scope3Category,
-      activityType: f.activityType,
-      method: f.method,
-      fuelOrMaterialCode: f.fuelOrMaterialCode,
-      region: f.region,
-      gas: f.gas,
-      basis: f.basis,
-      value: f.value.toString(),
-      unitNumerator: f.unitNumerator,
-      unitDenominator: f.unitDenominator,
-      validFrom: f.validFrom,
-      validTo: f.validTo,
-      sourceCitation: f.sourceCitation,
-      factorSetName: set.name,
-      factorSetVersion: set.version,
-    })),
-  );
+  const candidates = buildFactorCandidates(factorSets);
 
   const bases: Array<"LOCATION_BASED" | "MARKET_BASED" | undefined> =
     binding.outputBasis === "DUAL" ? ["LOCATION_BASED", "MARKET_BASED"] : [undefined];

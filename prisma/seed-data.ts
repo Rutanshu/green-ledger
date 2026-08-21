@@ -47,7 +47,7 @@ export const SITE_TYPES = [
 /** Real published values. Cite them properly — this is the whole point of the product. */
 export const DEFRA_2026 = {
   publisher: 'DEFRA', name: 'UK Government GHG Conversion Factors', version: '2026 v1.1',
-  publishedOn: '2026-06-01', regionScope: 'GLOBAL', licence: 'Open Government Licence v3.0',
+  publishedOn: '2026-01-01', regionScope: 'GLOBAL', licence: 'Open Government Licence v3.0',
   sourceUrl: 'https://www.gov.uk/government/collections/government-conversion-factors-for-company-reporting',
   factors: [
     { scope: 'SCOPE_1', activityType: 'STATIONARY_COMBUSTION', method: 'FUEL_BASED', fuel: 'diesel',        region: 'GLOBAL', value: '2.68000',   num: 'KG_CO2E', den: 'L',        cite: 'Fuels, Table 5' },
@@ -70,7 +70,7 @@ export const DEFRA_2026 = {
 
 export const GRID_2026 = {
   publisher: 'GRID_OPERATOR', name: 'UK Grid Carbon Intensity', version: 'v2026.1',
-  publishedOn: '2026-04-01', regionScope: 'GB', licence: 'CC BY 4.0',
+  publishedOn: '2026-01-01', regionScope: 'GB', licence: 'CC BY 4.0',
   sourceUrl: 'https://www.nationalgrideso.com/',
   factors: [
     { scope: 'SCOPE_2', activityType: 'PURCHASED_ELECTRICITY', method: 'AVERAGE_DATA', fuel: 'grid_electricity', region: 'GB-NAT', value: '0.19338', num: 'KG_CO2E', den: 'KWH', cite: 'Annual average grid intensity', basis: 'LOCATION_BASED' },

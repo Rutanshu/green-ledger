@@ -14,7 +14,7 @@ export default async function DataCollectionPage() {
     include: {
       assignments: {
         include: {
-          answers: { include: { question: true } },
+          answers: { include: { question: true, activityRecords: { include: { emissionRecords: true } } } },
           template: { include: { sections: { include: { questions: true } } } },
         },
       },
@@ -57,12 +57,15 @@ export default async function DataCollectionPage() {
                     <thead>
                       <tr className="text-left text-[11px] font-semibold uppercase tracking-wide text-muted">
                         <th className="px-4 py-2">Question</th>
+                        <th className="px-4 py-2">Emissions</th>
                         <th className="px-4 py-2">Answer</th>
                       </tr>
                     </thead>
                     <tbody>
                       {numericQuestions.map((q) => {
                         const a = answersByQuestion.get(q.id);
+                        const emissionRecords = a?.activityRecords.flatMap((ar) => ar.emissionRecords) ?? [];
+                        const totalKg = emissionRecords.reduce((sum, r) => sum + Number(r.emissionsKgCo2e), 0);
                         return (
                           <AnswerRow
                             key={q.id}
@@ -71,6 +74,7 @@ export default async function DataCollectionPage() {
                             code={q.code}
                             allowedUnits={q.allowedUnits}
                             existing={a ? { value: a.valueNumeric?.toString() ?? "", unit: a.unit ?? "", quality: a.dataQuality ?? "ESTIMATED" } : null}
+                            existingEmissionsKg={emissionRecords.length > 0 ? totalKg.toString() : null}
                           />
                         );
                       })}

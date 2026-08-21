@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { getCurrentOrg } from "@/lib/demo-org";
 import { orgScopedClient } from "@/lib/db/tenant";
+import { rawPrisma } from "@/lib/db/client";
+import { toTonnes } from "@/lib/calc";
+import Decimal from "decimal.js";
 
 export const dynamic = "force-dynamic";
 
@@ -17,11 +20,18 @@ async function getDashboardData() {
   if (!org) return null;
 
   const db = orgScopedClient(org.id);
-  const [sites, template] = await Promise.all([
+  const [sites, template, emissionsAgg] = await Promise.all([
     db.site.findMany({ include: { assignments: true }, orderBy: { code: "asc" } }),
     db.questionnaireTemplate.findFirst({
       where: { status: "PUBLISHED" },
       include: { sections: { include: { questions: { include: { binding: true } } } } },
+    }),
+    // EmissionRecord has no organization_id of its own — scoped via its
+    // ActivityRecord, same pattern as the QuestionnaireAssignment checks.
+    rawPrisma.emissionRecord.aggregate({
+      where: { activityRecord: { organizationId: org.id } },
+      _sum: { emissionsKgCo2e: true },
+      _count: true,
     }),
   ]);
 
@@ -37,7 +47,18 @@ async function getDashboardData() {
       ? 0
       : sites.reduce((sum, s) => sum + Number(s.assignments[0]?.completenessPct ?? 0), 0) / sites.length;
 
-  return { org, sites, bindingCount: bindings.length, issues, reporting: reporting.length, avgCompleteness };
+  const emissionsKg = new Decimal(emissionsAgg._sum.emissionsKgCo2e?.toString() ?? 0);
+
+  return {
+    org,
+    sites,
+    bindingCount: bindings.length,
+    issues,
+    reporting: reporting.length,
+    avgCompleteness,
+    emissionRecordCount: emissionsAgg._count,
+    emissionsTonnes: toTonnes(emissionsKg),
+  };
 }
 
 function Tile({ label, value, unit, note }: { label: string; value: string; unit?: string; note?: string }) {
@@ -63,7 +84,7 @@ export default async function Home() {
     );
   }
 
-  const { sites, bindingCount, issues, reporting, avgCompleteness } = data;
+  const { sites, bindingCount, issues, reporting, avgCompleteness, emissionRecordCount, emissionsTonnes } = data;
 
   return (
     <>
@@ -81,7 +102,11 @@ export default async function Home() {
           unit={`of ${bindingCount} bound`}
           note={issues > 0 ? "needs attention in Factor Lab" : undefined}
         />
-        <Tile label="Emissions calculated" value="0" unit="records" note="activity data not yet collected" />
+        {emissionRecordCount > 0 ? (
+          <Tile label="Total emissions" value={emissionsTonnes} unit="tCO2e" note={`from ${emissionRecordCount} calculated records`} />
+        ) : (
+          <Tile label="Emissions calculated" value="0" unit="records" note="submit an answer in Data Collection" />
+        )}
       </div>
 
       <h2 className="mb-2.5 mt-6 text-[14.5px] font-semibold">Progress by site</h2>

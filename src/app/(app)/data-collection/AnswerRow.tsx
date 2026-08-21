@@ -9,16 +9,26 @@ interface Props {
   code: string;
   allowedUnits: string[];
   existing: { value: string; unit: string; quality: string } | null;
+  existingEmissionsKg: string | null;
 }
 
 const QUALITIES = ["MEASURED", "CALCULATED", "ESTIMATED", "PROXY"];
 
-export function AnswerRow({ assignmentId, questionId, code, allowedUnits, existing }: Props) {
+export function AnswerRow({ assignmentId, questionId, code, allowedUnits, existing, existingEmissionsKg }: Props) {
   const [state, formAction, pending] = useActionState(submitAnswer, null);
+
+  const emissionsKg = state?.ok ? state.emissionsKgCo2e ?? null : existingEmissionsKg;
 
   return (
     <tr className="border-t border-grid align-top">
       <td className="px-4 py-2 font-medium">{code}</td>
+      <td className="px-4 py-2 font-mono text-xs text-ink2">
+        {emissionsKg ? (
+          `${Number(emissionsKg).toLocaleString()} kg CO2e`
+        ) : (
+          <span className="text-muted">—</span>
+        )}
+      </td>
       <td className="px-4 py-2">
         <form action={formAction} className="flex flex-wrap items-center gap-1.5">
           <input type="hidden" name="assignmentId" value={assignmentId} />
@@ -62,7 +72,12 @@ export function AnswerRow({ assignmentId, questionId, code, allowedUnits, existi
           >
             {pending ? "Saving…" : "Save"}
           </button>
-          {state?.ok && <span className="text-xs text-good">saved</span>}
+          {state?.ok && !state.calcWarning && <span className="text-xs text-good">saved &amp; calculated</span>}
+          {state?.ok && state.calcWarning && (
+            <span className="text-xs text-warn" title={state.calcWarning}>
+              saved — calc issue
+            </span>
+          )}
           {state?.error && <span className="text-xs text-crit">{state.error}</span>}
         </form>
       </td>
