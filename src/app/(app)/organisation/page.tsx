@@ -1,4 +1,6 @@
-import { getCurrentOrg } from "@/lib/demo-org";
+import { getCurrentMembership } from "@/lib/demo-org";
+import { can } from "@/lib/auth/permissions";
+import { Denied } from "../_components/Denied";
 
 export const dynamic = "force-dynamic";
 
@@ -12,8 +14,10 @@ function Row({ label, value }: { label: string; value: string }) {
 }
 
 export default async function OrganisationPage() {
-  const org = await getCurrentOrg();
-  if (!org) return null;
+  const membership = await getCurrentMembership();
+  if (!membership) return null;
+  if (!can(membership.role, "manage_org")) return <Denied role={membership.role} />;
+  const org = membership.org;
 
   return (
     <>

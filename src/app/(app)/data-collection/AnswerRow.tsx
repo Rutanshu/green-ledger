@@ -10,14 +10,33 @@ interface Props {
   allowedUnits: string[];
   existing: { value: string; unit: string; quality: string } | null;
   existingEmissionsKg: string | null;
+  canEdit: boolean;
 }
 
 const QUALITIES = ["MEASURED", "CALCULATED", "ESTIMATED", "PROXY"];
 
-export function AnswerRow({ assignmentId, questionId, code, allowedUnits, existing, existingEmissionsKg }: Props) {
+export function AnswerRow({ assignmentId, questionId, code, allowedUnits, existing, existingEmissionsKg, canEdit }: Props) {
   const [state, formAction, pending] = useActionState(submitAnswer, null);
 
   const emissionsKg = state?.ok ? state.emissionsKgCo2e ?? null : existingEmissionsKg;
+
+  if (!canEdit) {
+    return (
+      <tr className="border-t border-grid align-top">
+        <td className="px-4 py-2 font-medium">{code}</td>
+        <td className="px-4 py-2 font-mono text-xs text-ink2">
+          {emissionsKg ? `${Number(emissionsKg).toLocaleString()} kg CO2e` : <span className="text-muted">—</span>}
+        </td>
+        <td className="px-4 py-2 text-xs text-ink2">
+          {existing ? (
+            `${existing.value} ${existing.unit} · ${existing.quality}`
+          ) : (
+            <span className="text-muted">not answered</span>
+          )}
+        </td>
+      </tr>
+    );
+  }
 
   return (
     <tr className="border-t border-grid align-top">

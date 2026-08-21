@@ -1,6 +1,15 @@
-import { startDemo } from "./actions";
+import { quickLogin } from "./actions";
 import { SignInForm } from "./SignInForm";
 import { RegTimeline } from "./RegTimeline";
+import { ROLE_LABEL, type Role } from "@/lib/auth/permissions";
+
+const DEMO_ACCOUNTS: Array<{ role: Role; email: string; can: string }> = [
+  { role: "SUPER_ADMIN", email: "super.admin@greenledger.demo", can: "Everything, including Organisation and Users & roles" },
+  { role: "DATA_MANAGER", email: "data.manager@greenledger.demo", can: "Sites, Factor Lab, Builder, Tasks, Data Collection" },
+  { role: "DATA_INPUTTER", email: "data.inputter@greenledger.demo", can: "Data Collection only" },
+  { role: "READ_ONLY", email: "read.only@greenledger.demo", can: "View everywhere, no edits" },
+];
+const DEMO_PASSWORD = "Demo2026!";
 
 const PILLARS = [
   {
@@ -77,34 +86,42 @@ export default function LoginPage() {
         <div className="rise lg:sticky lg:top-16" style={{ animationDelay: "80ms" }}>
           <div className="glass-strong rounded-2xl p-6">
             <h2 className="text-base font-semibold text-ink">Sign in</h2>
-            <p className="mt-1 text-xs text-ink2">For your own account. Not wired up yet — try the demo below.</p>
+            <p className="mt-1 text-xs text-ink2">Real accounts, real passwords — use any of the four below.</p>
             <div className="mt-4">
               <SignInForm />
             </div>
+          </div>
 
-            <div className="my-5 flex items-center gap-3 text-xs text-muted">
-              <div className="h-px flex-1 bg-border" />
-              or
-              <div className="h-px flex-1 bg-border" />
-            </div>
-
-            <form action={startDemo}>
-              <button
-                type="submit"
-                className="w-full rounded-xl bg-accent px-4 py-3 text-sm font-medium text-white shadow-[0_6px_20px_rgba(27,175,122,0.35)] transition hover:opacity-90"
-              >
-                Try the demo — no signup required
-              </button>
-            </form>
-            <p className="mt-2 text-center text-xs text-muted">
-              A seeded organisation — 4 sites, real emission factors, a published questionnaire.
+          <div className="glass mt-4 rounded-2xl p-5">
+            <h3 className="text-sm font-semibold text-ink">Demo accounts — one per role</h3>
+            <p className="mt-1 text-xs text-ink2">
+              Same password for all four: <code className="rounded bg-track px-1.5 py-0.5 font-mono">{DEMO_PASSWORD}</code>
             </p>
+            <div className="mt-4 flex flex-col gap-2">
+              {DEMO_ACCOUNTS.map((a) => (
+                <div key={a.role} className="flex items-center justify-between gap-3 rounded-xl border border-border bg-plane/40 p-3">
+                  <div className="min-w-0">
+                    <div className="text-[13px] font-semibold text-ink">{ROLE_LABEL[a.role]}</div>
+                    <div className="truncate font-mono text-[11px] text-ink2">{a.email}</div>
+                    <div className="mt-0.5 text-[11px] text-muted">{a.can}</div>
+                  </div>
+                  <form action={quickLogin.bind(null, a.role)}>
+                    <button
+                      type="submit"
+                      className="whitespace-nowrap rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-medium hover:bg-track"
+                    >
+                      Continue
+                    </button>
+                  </form>
+                </div>
+              ))}
+            </div>
           </div>
 
           <div className="glass mt-4 rounded-2xl p-4 text-xs text-ink2">
-            <span className="font-semibold text-ink">Heads up:</span> the demo is a single shared organisation right
-            now — everyone who clicks &ldquo;Try the demo&rdquo; sees and edits the same data. Don&rsquo;t put anything you need
-            in it.
+            <span className="font-semibold text-ink">Heads up:</span> these four accounts are shared demo logins, not
+            personal ones — anyone with this link can sign in as any of them. Real per-person accounts (invite flow,
+            your own password) aren&rsquo;t built yet.
           </div>
         </div>
       </main>

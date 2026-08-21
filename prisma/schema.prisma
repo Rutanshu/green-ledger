@@ -123,12 +123,18 @@ enum BindingHealth {
   BROKEN
 }
 
+/// SUPER_ADMIN: everything, including Organisation and Users & roles.
+/// DATA_MANAGER: Sites, Factor Lab, Builder, Tasks, Data Collection — not
+/// Organisation settings or user management.
+/// DATA_INPUTTER: Data Collection only; read-only everywhere else.
+/// READ_ONLY: view everywhere, no writes. See lib/auth/permissions.ts —
+/// this enum is the source of truth; the capability matrix maps it to
+/// what each role can actually do.
 enum Role {
-  OWNER
-  ADMIN
-  CONTRIBUTOR
-  APPROVER
-  AUDITOR
+  SUPER_ADMIN
+  DATA_MANAGER
+  DATA_INPUTTER
+  READ_ONLY
 }
 
 enum AssetCategory {
@@ -325,6 +331,9 @@ model User {
   email         String       @unique
   name          String?
   image         String?
+  /// scrypt hash, see lib/auth/password.ts. Null for a user who has never
+  /// set a password (e.g. would-be OAuth-only users, once OAuth exists).
+  passwordHash  String?      @map("password_hash")
   emailVerified DateTime?
   createdAt     DateTime     @default(now())
   memberships   Membership[]
@@ -369,7 +378,7 @@ model Membership {
   id             String       @id @default(uuid())
   userId         String       @map("user_id")
   organizationId String       @map("organization_id")
-  role           Role         @default(CONTRIBUTOR)
+  role           Role         @default(READ_ONLY)
   createdAt      DateTime     @default(now()) @map("created_at")
 
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)

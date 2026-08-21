@@ -13,6 +13,7 @@ import {
   type BindingHealth,
 } from '../src/lib/factors';
 import { computeCompleteness, type VisibilityRule } from '../src/lib/visibility';
+import { hashPassword } from '../src/lib/auth/password';
 import {
   GWP_AR6,
   ASSET_TYPES,
@@ -113,11 +114,48 @@ async function ensureTasks(orgId: string) {
   console.log(`Seeded ${tasks.length} tasks.`);
 }
 
+/**
+ * One real, log-in-able account per role, so "who can do what" is
+ * something you can actually click through rather than take on faith.
+ * Same password for all four — this is a demo, not a security boundary;
+ * see lib/auth/permissions.ts for what each role can actually do.
+ */
+const DEMO_PASSWORD = 'Demo2026!';
+const DEMO_USERS = [
+  { email: 'super.admin@greenledger.demo', name: 'Ava Okonkwo', role: 'SUPER_ADMIN' as const },
+  { email: 'data.manager@greenledger.demo', name: 'Priya Shah', role: 'DATA_MANAGER' as const },
+  { email: 'data.inputter@greenledger.demo', name: 'Tom Whitfield', role: 'DATA_INPUTTER' as const },
+  { email: 'read.only@greenledger.demo', name: 'Grace Lindqvist', role: 'READ_ONLY' as const },
+];
+
+async function ensureUsers(orgId: string) {
+  const existingCount = await prisma.membership.count({ where: { organizationId: orgId } });
+  if (existingCount > 0) {
+    console.log(`Users already seeded (${existingCount} memberships). Skipping.`);
+    return;
+  }
+
+  const passwordHash = hashPassword(DEMO_PASSWORD);
+  for (const u of DEMO_USERS) {
+    const user = await prisma.user.upsert({
+      where: { email: u.email },
+      create: { email: u.email, name: u.name, passwordHash },
+      update: { passwordHash },
+    });
+    await prisma.membership.create({
+      data: { userId: user.id, organizationId: orgId, role: u.role },
+    });
+  }
+  console.log(`Seeded ${DEMO_USERS.length} demo accounts, all password "${DEMO_PASSWORD}":`);
+  for (const u of DEMO_USERS) console.log(`  ${u.role.padEnd(14)} ${u.email}`);
+}
+
 async function main() {
   const existing = await prisma.organization.findFirst({ where: { legalName: 'Meridian Industries (Demo)' } });
   if (existing) {
     console.log(`Organization "Meridian Industries (Demo)" already exists (${existing.id}).`);
     await ensureTasks(existing.id);
+    await ensureUsers(existing.id);
     return;
   }
 
@@ -478,6 +516,7 @@ async function main() {
   }
 
   await ensureTasks(org.id);
+  await ensureUsers(org.id);
 
   console.log(`\nDone. Organization ${org.id} ("${org.legalName}") seeded.`);
 }

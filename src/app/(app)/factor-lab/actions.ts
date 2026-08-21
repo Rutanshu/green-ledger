@@ -1,14 +1,19 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getCurrentOrg } from "@/lib/demo-org";
+import { getCurrentMembership } from "@/lib/demo-org";
 import { orgScopedClient } from "@/lib/db/tenant";
 import { checkBindingHealth } from "@/lib/factors";
 import { buildFactorCandidates } from "@/lib/db/factor-candidates";
+import { can } from "@/lib/auth/permissions";
+import { recordAudit } from "@/lib/audit";
+import { rawPrisma } from "@/lib/db/client";
 
 export async function retestBinding(bindingId: string) {
-  const org = await getCurrentOrg();
-  if (!org) return;
+  const membership = await getCurrentMembership();
+  if (!membership) return;
+  if (!can(membership.role, "manage_factors")) return; // UI already hides this control for other roles
+  const org = membership.org;
   const db = orgScopedClient(org.id);
 
   const binding = await db.factorBinding.findFirst({
@@ -47,6 +52,14 @@ export async function retestBinding(bindingId: string) {
   await db.factorBinding.update({
     where: { id: bindingId },
     data: { health: worst.health, healthMessage: worst.message, healthCheckedAt: new Date() },
+  });
+  await recordAudit(rawPrisma, {
+    organizationId: org.id,
+    actorUserId: membership.user.id,
+    action: "UPDATE",
+    entityType: "FactorBinding",
+    entityId: bindingId,
+    after: { health: worst.health, message: worst.message },
   });
 
   revalidatePath("/factor-lab");

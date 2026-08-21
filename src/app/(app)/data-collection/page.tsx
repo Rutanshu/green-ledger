@@ -1,12 +1,15 @@
-import { getCurrentOrg } from "@/lib/demo-org";
+import { getCurrentMembership } from "@/lib/demo-org";
 import { orgScopedClient } from "@/lib/db/tenant";
+import { can } from "@/lib/auth/permissions";
 import { AnswerRow } from "./AnswerRow";
 
 export const dynamic = "force-dynamic";
 
 export default async function DataCollectionPage() {
-  const org = await getCurrentOrg();
-  if (!org) return null;
+  const membership = await getCurrentMembership();
+  if (!membership) return null;
+  const org = membership.org;
+  const canEdit = can(membership.role, "submit_answers");
   const db = orgScopedClient(org.id);
 
   const sites = await db.site.findMany({
@@ -25,8 +28,14 @@ export default async function DataCollectionPage() {
     <>
       <h1 className="text-xl font-semibold">Data Collection</h1>
       <p className="mt-0.5 text-[13px] text-ink2">
-        Live — edit a value and save. Completeness recalculates immediately via the same{" "}
-        <code className="font-mono">computeCompleteness()</code> used everywhere else.
+        {canEdit ? (
+          <>
+            Live — edit a value and save. Completeness recalculates immediately via the same{" "}
+            <code className="font-mono">computeCompleteness()</code> used everywhere else.
+          </>
+        ) : (
+          "Read-only for your role — you can see every answer, but editing is off."
+        )}
       </p>
 
       <div className="mt-5 flex flex-col gap-4">
@@ -75,6 +84,7 @@ export default async function DataCollectionPage() {
                             allowedUnits={q.allowedUnits}
                             existing={a ? { value: a.valueNumeric?.toString() ?? "", unit: a.unit ?? "", quality: a.dataQuality ?? "ESTIMATED" } : null}
                             existingEmissionsKg={emissionRecords.length > 0 ? totalKg.toString() : null}
+                            canEdit={canEdit}
                           />
                         );
                       })}

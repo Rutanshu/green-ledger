@@ -10,6 +10,7 @@ import { rawPrisma } from '@/lib/db/client';
 
 let orgId: string;
 let sessionOrgId: string;
+let sessionUserId: string;
 let otherOrgId: string;
 let assignmentId: string;
 let questionId: string;
@@ -18,10 +19,15 @@ let originalUnit: string | null;
 let periodId: string;
 let originalPeriodStatus: string;
 let cleaningSpendQuestionId: string;
+let readOnlyUserId: string;
 
 vi.mock('next/headers', () => ({
   cookies: async () => ({
-    get: (name: string) => (name === 'gl_org' ? { value: sessionOrgId } : undefined),
+    get: (name: string) => {
+      if (name === 'gl_org') return { value: sessionOrgId };
+      if (name === 'gl_user') return { value: sessionUserId };
+      return undefined;
+    },
   }),
 }));
 vi.mock('next/cache', () => ({ revalidatePath: () => {} }));
@@ -34,8 +40,16 @@ beforeAll(async () => {
   orgId = org.id;
   sessionOrgId = orgId;
 
+  const superAdmin = await rawPrisma.membership.findFirstOrThrow({ where: { organizationId: orgId, role: 'SUPER_ADMIN' } });
+  sessionUserId = superAdmin.userId;
+  const readOnly = await rawPrisma.membership.findFirstOrThrow({ where: { organizationId: orgId, role: 'READ_ONLY' } });
+  readOnlyUserId = readOnly.userId;
+
   const other = await rawPrisma.organization.create({ data: { legalName: 'Zzz Cross-Tenant Test Org (delete me)' } });
   otherOrgId = other.id;
+  // a real membership in the OTHER org — so the cross-tenant test proves the
+  // assignment-ownership check catches it, not just "no membership at all"
+  await rawPrisma.membership.create({ data: { userId: sessionUserId, organizationId: otherOrgId, role: 'SUPER_ADMIN' } });
 
   const site = await rawPrisma.site.findFirstOrThrow({ where: { organizationId: orgId, code: 'MI-NG-01' } });
   const assignment = await rawPrisma.questionnaireAssignment.findFirstOrThrow({ where: { siteId: site.id } });
@@ -117,13 +131,28 @@ describe('submitAnswer', () => {
   });
 
   it('refuses to write into another org\'s assignment, even with a valid session', async () => {
-    sessionOrgId = otherOrgId; // a real session — just for a different org
+    sessionOrgId = otherOrgId; // a real membership — just for a different org
     try {
       const result = await submitAnswer(null, fd({ assignmentId, questionId, value: '1', unit: 'L', dataQuality: 'MEASURED' }));
       expect(result?.ok).toBe(false);
       expect(result?.error).toMatch(/not found/i);
     } finally {
       sessionOrgId = orgId;
+    }
+  });
+
+  it('refuses a READ_ONLY session, even though it is a real signed-in user', async () => {
+    sessionUserId = readOnlyUserId;
+    try {
+      const result = await submitAnswer(null, fd({ assignmentId, questionId, value: '1', unit: 'L', dataQuality: 'MEASURED' }));
+      expect(result?.ok).toBe(false);
+      expect(result?.error).toMatch(/read only/i);
+
+      // and confirms nothing was written
+      const row = await rawPrisma.answer.findUnique({ where: { assignmentId_questionId: { assignmentId, questionId } } });
+      expect(row?.valueNumeric?.toString()).not.toBe('1');
+    } finally {
+      sessionUserId = (await rawPrisma.membership.findFirstOrThrow({ where: { organizationId: orgId, role: 'SUPER_ADMIN' } })).userId;
     }
   });
 

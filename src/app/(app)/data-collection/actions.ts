@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
-import { getCurrentOrg } from "@/lib/demo-org";
+import { getCurrentMembership } from "@/lib/demo-org";
 import { orgScopedClient } from "@/lib/db/tenant";
 import { rawPrisma } from "@/lib/db/client";
 import { computeCompleteness, type VisibilityRule } from "@/lib/visibility";
@@ -10,6 +10,7 @@ import { calculateEmissions, calculateDualBasis, sumKg, toTonnes, type CalcInput
 import { buildFactorCandidates } from "@/lib/db/factor-candidates";
 import { projectAnswer } from "@/lib/project";
 import { recordAudit } from "@/lib/audit";
+import { can, ROLE_LABEL } from "@/lib/auth/permissions";
 import type { UnitCode } from "@/lib/units";
 
 const AnswerInput = z.object({
@@ -29,8 +30,12 @@ export type SubmitAnswerState = {
 } | null;
 
 export async function submitAnswer(_prev: SubmitAnswerState, formData: FormData): Promise<SubmitAnswerState> {
-  const org = await getCurrentOrg();
-  if (!org) return { ok: false, error: "Not signed in." };
+  const membership = await getCurrentMembership();
+  if (!membership) return { ok: false, error: "Not signed in." };
+  if (!can(membership.role, "submit_answers")) {
+    return { ok: false, error: `Your role (${ROLE_LABEL[membership.role]}) can't submit answers.` };
+  }
+  const org = membership.org;
 
   const parsed = AnswerInput.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {
@@ -103,6 +108,7 @@ export async function submitAnswer(_prev: SubmitAnswerState, formData: FormData)
     });
     await recordAudit(tx, {
       organizationId: org.id,
+      actorUserId: membership.user.id,
       action: beforeAnswer ? "UPDATE" : "CREATE",
       entityType: "Answer",
       entityId: answer.id,
@@ -135,6 +141,7 @@ export async function submitAnswer(_prev: SubmitAnswerState, formData: FormData)
         : await tx.activityRecord.create({ data: activityData });
       await recordAudit(tx, {
         organizationId: org.id,
+        actorUserId: membership.user.id,
         action: beforeActivity ? "UPDATE" : "CREATE",
         entityType: "ActivityRecord",
         entityId: activityRecord.id,
@@ -203,6 +210,7 @@ export async function submitAnswer(_prev: SubmitAnswerState, formData: FormData)
         });
         await recordAudit(tx, {
           organizationId: org.id,
+          actorUserId: membership.user.id,
           action: "RECALCULATE",
           entityType: "EmissionRecord",
           entityId: activityRecord.id,
@@ -211,6 +219,7 @@ export async function submitAnswer(_prev: SubmitAnswerState, formData: FormData)
       } else if (calcWarning) {
         await recordAudit(tx, {
           organizationId: org.id,
+          actorUserId: membership.user.id,
           action: "RECALCULATE",
           entityType: "EmissionRecord",
           entityId: activityRecord.id,

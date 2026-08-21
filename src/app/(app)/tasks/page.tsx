@@ -1,5 +1,6 @@
-import { getCurrentOrg } from "@/lib/demo-org";
+import { getCurrentMembership } from "@/lib/demo-org";
 import { orgScopedClient } from "@/lib/db/tenant";
+import { can } from "@/lib/auth/permissions";
 import { setTaskStatus } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -12,8 +13,10 @@ const PRIORITY_STYLE: Record<number, string> = {
 };
 
 export default async function TasksPage() {
-  const org = await getCurrentOrg();
-  if (!org) return null;
+  const membership = await getCurrentMembership();
+  if (!membership) return null;
+  const org = membership.org;
+  const canManage = can(membership.role, "manage_tasks");
   const db = orgScopedClient(org.id);
 
   const tasks = await db.task.findMany({ orderBy: [{ priority: "asc" }, { createdAt: "asc" }] });
@@ -40,11 +43,13 @@ export default async function TasksPage() {
                 <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${PRIORITY_STYLE[t.priority] ?? PRIORITY_STYLE[3]}`}>
                   {PRIORITY_LABEL[t.priority] ?? "Low"}
                 </span>
-                <form action={setTaskStatus.bind(null, t.id, t.status === "DONE" ? "OPEN" : "DONE")}>
-                  <button type="submit" className="whitespace-nowrap rounded-md border border-border px-2 py-1 text-xs hover:bg-track">
-                    {t.status === "DONE" ? "Reopen" : "Mark done"}
-                  </button>
-                </form>
+                {canManage && (
+                  <form action={setTaskStatus.bind(null, t.id, t.status === "DONE" ? "OPEN" : "DONE")}>
+                    <button type="submit" className="whitespace-nowrap rounded-md border border-border px-2 py-1 text-xs hover:bg-track">
+                      {t.status === "DONE" ? "Reopen" : "Mark done"}
+                    </button>
+                  </form>
+                )}
               </div>
             </div>
           ))}
