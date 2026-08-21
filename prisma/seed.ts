@@ -6,7 +6,7 @@
  * just created. If the demo data changes and a binding breaks, the seed
  * output changes with it instead of silently going stale.
  */
-import { PrismaClient } from '../src/generated/prisma';
+import { adminPrisma } from '../src/lib/db/admin-client';
 import {
   checkBindingHealth,
   type CandidateFactor,
@@ -28,7 +28,14 @@ import {
   DEMO_ANSWERS,
 } from './seed-data';
 
-const prisma = new PrismaClient();
+// Admin script — deliberately connects as the owner role (DIRECT_URL) via
+// adminPrisma, not the app's own DATABASE_URL. The app's runtime role
+// (app_user) is RLS-restricted on purpose (see the _org_scoping_rls
+// migration): it can only see/write rows for whatever app.org_id a
+// request sets. Seeding writes rows for a brand-new org with no session
+// context to set that from, so it needs the same RLS-bypassing privilege
+// migrations already require.
+const prisma = adminPrisma;
 
 const HEALTH_RANK: Record<BindingHealth, number> = {
   OK: 0,

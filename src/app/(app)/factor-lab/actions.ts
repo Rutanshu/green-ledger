@@ -2,12 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { getCurrentMembership } from "@/lib/demo-org";
-import { orgScopedClient } from "@/lib/db/tenant";
+import { orgScopedClient, withOrgTransaction } from "@/lib/db/tenant";
 import { checkBindingHealth } from "@/lib/factors";
 import { buildFactorCandidates } from "@/lib/db/factor-candidates";
 import { can } from "@/lib/auth/permissions";
 import { recordAudit } from "@/lib/audit";
-import { rawPrisma } from "@/lib/db/client";
 
 export async function retestBinding(bindingId: string) {
   const membership = await getCurrentMembership();
@@ -53,14 +52,16 @@ export async function retestBinding(bindingId: string) {
     where: { id: bindingId },
     data: { health: worst.health, healthMessage: worst.message, healthCheckedAt: new Date() },
   });
-  await recordAudit(rawPrisma, {
-    organizationId: org.id,
-    actorUserId: membership.user.id,
-    action: "UPDATE",
-    entityType: "FactorBinding",
-    entityId: bindingId,
-    after: { health: worst.health, message: worst.message },
-  });
+  await withOrgTransaction(org.id, (tx) =>
+    recordAudit(tx, {
+      organizationId: org.id,
+      actorUserId: membership.user.id,
+      action: "UPDATE",
+      entityType: "FactorBinding",
+      entityId: bindingId,
+      after: { health: worst.health, message: worst.message },
+    }),
+  );
 
   revalidatePath("/factor-lab");
   revalidatePath("/");

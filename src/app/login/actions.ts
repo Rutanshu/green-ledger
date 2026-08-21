@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { findDemoOrg } from "@/lib/demo-org";
 import { setSession, clearSession } from "@/lib/session";
 import { rawPrisma } from "@/lib/db/client";
+import { withOrgTransaction } from "@/lib/db/tenant";
 import { verifyPassword } from "@/lib/auth/password";
 import { recordAudit } from "@/lib/audit";
 import type { Role } from "@/lib/auth/permissions";
@@ -37,14 +38,16 @@ export async function attemptSignIn(_prevState: SignInState, formData: FormData)
   }
 
   await setSession({ orgId: membership.organizationId, userId: user.id });
-  await recordAudit(rawPrisma, {
-    organizationId: membership.organizationId,
-    action: "LOGIN",
-    entityType: "User",
-    entityId: user.id,
-    actorUserId: user.id,
-    after: { role: membership.role },
-  });
+  await withOrgTransaction(membership.organizationId, (tx) =>
+    recordAudit(tx, {
+      organizationId: membership.organizationId,
+      action: "LOGIN",
+      entityType: "User",
+      entityId: user.id,
+      actorUserId: user.id,
+      after: { role: membership.role },
+    }),
+  );
 
   redirect("/");
 }
@@ -63,14 +66,16 @@ export async function quickLogin(role: Role) {
   }
 
   await setSession({ orgId: org.id, userId: membership.user.id });
-  await recordAudit(rawPrisma, {
-    organizationId: org.id,
-    action: "LOGIN",
-    entityType: "User",
-    entityId: membership.user.id,
-    actorUserId: membership.user.id,
-    after: { role, via: "quick-login" },
-  });
+  await withOrgTransaction(org.id, (tx) =>
+    recordAudit(tx, {
+      organizationId: org.id,
+      action: "LOGIN",
+      entityType: "User",
+      entityId: membership.user.id,
+      actorUserId: membership.user.id,
+      after: { role, via: "quick-login" },
+    }),
+  );
 
   redirect("/");
 }

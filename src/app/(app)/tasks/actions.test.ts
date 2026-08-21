@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
-import { rawPrisma } from '@/lib/db/client';
+import { adminPrisma as rawPrisma } from '@/lib/db/admin-client';
 
 let orgId: string;
 let sessionUserId: string;

@@ -9,6 +9,7 @@
  * Never import `rawPrisma` directly from app code — always go through this.
  */
 import { rawPrisma } from './client';
+import type { Prisma } from '../../generated/prisma';
 
 /** Models with a required organization_id: every row belongs to exactly one org. */
 const STRICT_ORG_MODELS = new Set([
@@ -96,5 +97,26 @@ export function orgScopedClient(orgId: string) {
         },
       },
     },
+  });
+}
+
+/**
+ * For the (rare, deliberate) case where a data write and its AuditEvent
+ * can't both go through orgScopedClient's per-call scoping — e.g. one
+ * write via the scoped client, then a separate recordAudit() call against
+ * rawPrisma. That second call has no app.org_id set, so it either writes
+ * an unaudited-looking event with no org, or — since audit_events now has
+ * real RLS — fails outright. Use this to run both in one transaction with
+ * app.org_id set once, same guarantee orgScopedClient gives a single call.
+ */
+export async function withOrgTransaction<T>(
+  orgId: string,
+  fn: (tx: Prisma.TransactionClient) => Promise<T>,
+): Promise<T> {
+  if (!orgId) throw new Error('withOrgTransaction() requires a non-empty organisation id.');
+  const escapedOrgId = orgId.replace(/'/g, "''");
+  return rawPrisma.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe(`SET LOCAL app.org_id = '${escapedOrgId}'`);
+    return fn(tx);
   });
 }
