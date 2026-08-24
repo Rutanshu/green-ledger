@@ -15,7 +15,7 @@ import type { Prisma } from '../../generated/prisma';
 const STRICT_ORG_MODELS = new Set([
   'Membership', 'LabelOverride', 'Site', 'SiteAsset', 'ReportingPeriod',
   'QuestionnaireTemplate', 'Document', 'Task', 'AuditEvent', 'Target',
-  'Report', 'ImportBatch', 'ActivityRecord',
+  'Report', 'ImportBatch', 'ActivityRecord', 'Position',
 ]);
 
 /**

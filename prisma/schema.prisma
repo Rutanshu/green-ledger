@@ -137,6 +137,18 @@ enum Role {
   READ_ONLY
 }
 
+/// What a position is accountable FOR — distinct from Role (what a person can
+/// technically do in the app). A position is stable business responsibility;
+/// Role is technical permission. The same person often holds both.
+enum PositionType {
+  DATA_OWNER
+  REVIEWER
+  APPROVER
+  SITE_MANAGER
+  CATEGORY_OWNER
+  OTHER
+}
+
 enum AssetCategory {
   STATIONARY_COMBUSTION
   MOBILE_COMBUSTION
@@ -327,16 +339,17 @@ enum ImportStatus {
 // ─────────────────────────────── identity ───────────────────────────────
 
 model User {
-  id            String       @id @default(uuid())
-  email         String       @unique
-  name          String?
-  image         String?
+  id                  String               @id @default(uuid())
+  email               String               @unique
+  name                String?
+  image               String?
   /// scrypt hash, see lib/auth/password.ts. Null for a user who has never
   /// set a password (e.g. would-be OAuth-only users, once OAuth exists).
-  passwordHash  String?      @map("password_hash")
-  emailVerified DateTime?
-  createdAt     DateTime     @default(now())
-  memberships   Membership[]
+  passwordHash        String?              @map("password_hash")
+  emailVerified       DateTime?
+  createdAt           DateTime             @default(now())
+  memberships         Membership[]
+  positionAssignments PositionAssignment[]
 
   @@map("users")
 }
@@ -344,7 +357,7 @@ model User {
 model Organization {
   id                    String                @id @default(uuid())
   legalName             String                @map("legal_name")
-  consolidationApproach ConsolidationApproach  @default(OPERATIONAL_CONTROL) @map("consolidation_approach")
+  consolidationApproach ConsolidationApproach @default(OPERATIONAL_CONTROL) @map("consolidation_approach")
   baseYear              Int?                  @map("base_year")
   baseYearRationale     String?               @map("base_year_rationale")
   defaultGwpSetId       String?               @map("default_gwp_set_id")
@@ -355,31 +368,32 @@ model Organization {
   createdAt             DateTime              @default(now()) @map("created_at")
   updatedAt             DateTime              @updatedAt @map("updated_at")
 
-  memberships     Membership[]
-  sites           Site[]
-  periods         ReportingPeriod[]
-  factorSets      EmissionFactorSet[]
-  templates       QuestionnaireTemplate[]
-  documents       Document[]
-  tasks           Task[]
-  auditEvents     AuditEvent[]
-  targets         Target[]
-  reports         Report[]
-  labelOverrides  LabelOverride[]
-  vocabulary      VocabularyEntry[]
-  fuelProperties  FuelProperty[]
-  importBatches   ImportBatch[]
+  memberships    Membership[]
+  sites          Site[]
+  periods        ReportingPeriod[]
+  factorSets     EmissionFactorSet[]
+  templates      QuestionnaireTemplate[]
+  documents      Document[]
+  tasks          Task[]
+  auditEvents    AuditEvent[]
+  targets        Target[]
+  reports        Report[]
+  labelOverrides LabelOverride[]
+  vocabulary     VocabularyEntry[]
+  fuelProperties FuelProperty[]
+  importBatches  ImportBatch[]
+  positions      Position[]
 
   @@index([isSandbox, sandboxExpiresAt])
   @@map("organizations")
 }
 
 model Membership {
-  id             String       @id @default(uuid())
-  userId         String       @map("user_id")
-  organizationId String       @map("organization_id")
-  role           Role         @default(READ_ONLY)
-  createdAt      DateTime     @default(now()) @map("created_at")
+  id             String   @id @default(uuid())
+  userId         String   @map("user_id")
+  organizationId String   @map("organization_id")
+  role           Role     @default(READ_ONLY)
+  createdAt      DateTime @default(now()) @map("created_at")
 
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -440,42 +454,43 @@ model LabelOverride {
 // ─────────────────────────────── sites ───────────────────────────────
 
 model Site {
-  id             String   @id @default(uuid())
-  organizationId String   @map("organization_id")
-  name           String
-  code           String
-  legalEntity    String?  @map("legal_entity")
-  costCentre     String?  @map("cost_centre")
-  address        String?
-  city           String?
-  region         String?
-  country        String   // ISO 3166-1 alpha-2
-  gridRegion     String?  @map("grid_region")
-  timezone       String?
+  id              String    @id @default(uuid())
+  organizationId  String    @map("organization_id")
+  name            String
+  code            String
+  legalEntity     String?   @map("legal_entity")
+  costCentre      String?   @map("cost_centre")
+  address         String?
+  city            String?
+  region          String?
+  country         String // ISO 3166-1 alpha-2
+  gridRegion      String?   @map("grid_region")
+  timezone        String?
   /// code from the SITE_TYPE vocabulary
-  siteType       String   @map("site_type")
-  ownership      String?
-  floorAreaM2    Decimal? @map("floor_area_m2") @db.Decimal(20, 6)
-  headcountFte   Decimal? @map("headcount_fte") @db.Decimal(20, 6)
-  annualRevenue  Decimal? @map("annual_revenue") @db.Decimal(20, 2)
+  siteType        String    @map("site_type")
+  ownership       String?
+  floorAreaM2     Decimal?  @map("floor_area_m2") @db.Decimal(20, 6)
+  headcountFte    Decimal?  @map("headcount_fte") @db.Decimal(20, 6)
+  annualRevenue   Decimal?  @map("annual_revenue") @db.Decimal(20, 2)
   revenueCurrency UnitCode? @map("revenue_currency")
   /// org-defined denominators: { "org_units_produced": 1420000 }
-  denominators   Json?
-  parentSiteId   String?  @map("parent_site_id")
-  inScopeFrom    DateTime? @map("in_scope_from") @db.Date
-  inScopeTo      DateTime? @map("in_scope_to") @db.Date
-  dataOwnerId    String?  @map("data_owner_id")
-  approverId     String?  @map("approver_id")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  denominators    Json?
+  parentSiteId    String?   @map("parent_site_id")
+  inScopeFrom     DateTime? @map("in_scope_from") @db.Date
+  inScopeTo       DateTime? @map("in_scope_to") @db.Date
+  dataOwnerId     String?   @map("data_owner_id")
+  approverId      String?   @map("approver_id")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
 
-  organization    Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  parentSite      Site?                  @relation("SiteHierarchy", fields: [parentSiteId], references: [id])
-  childSites      Site[]                 @relation("SiteHierarchy")
-  assets          SiteAsset[]
+  organization     Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  parentSite       Site?                     @relation("SiteHierarchy", fields: [parentSiteId], references: [id])
+  childSites       Site[]                    @relation("SiteHierarchy")
+  assets           SiteAsset[]
   ownershipPeriods SiteOwnershipPeriod[]
-  activityRecords ActivityRecord[]
-  assignments     QuestionnaireAssignment[]
+  activityRecords  ActivityRecord[]
+  assignments      QuestionnaireAssignment[]
+  positions        Position[]
 
   @@unique([organizationId, code])
   @@index([organizationId, siteType])
@@ -483,11 +498,11 @@ model Site {
 }
 
 model SiteOwnershipPeriod {
-  id                 String   @id @default(uuid())
-  siteId             String   @map("site_id")
-  validFrom          DateTime @map("valid_from") @db.Date
+  id                 String    @id @default(uuid())
+  siteId             String    @map("site_id")
+  validFrom          DateTime  @map("valid_from") @db.Date
   validTo            DateTime? @map("valid_to") @db.Date
-  consolidationShare Decimal  @default(1) @map("consolidation_share") @db.Decimal(9, 6)
+  consolidationShare Decimal   @default(1) @map("consolidation_share") @db.Decimal(9, 6)
 
   site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
 
@@ -530,23 +545,23 @@ model SiteAsset {
 // ─────────────────────────────── periods ───────────────────────────────
 
 model ReportingPeriod {
-  id                  String       @id @default(uuid())
-  organizationId      String       @map("organization_id")
-  label               String
-  startsOn            DateTime     @map("starts_on") @db.Date
-  endsOn              DateTime     @map("ends_on") @db.Date
-  status              PeriodStatus @default(DRAFT)
-  defaultFactorSetId  String?      @map("default_factor_set_id")
-  lockedAt            DateTime?    @map("locked_at")
-  lockedById          String?      @map("locked_by_id")
-  unlockReason        String?      @map("unlock_reason")
-  createdAt           DateTime     @default(now()) @map("created_at")
+  id                 String       @id @default(uuid())
+  organizationId     String       @map("organization_id")
+  label              String
+  startsOn           DateTime     @map("starts_on") @db.Date
+  endsOn             DateTime     @map("ends_on") @db.Date
+  status             PeriodStatus @default(DRAFT)
+  defaultFactorSetId String?      @map("default_factor_set_id")
+  lockedAt           DateTime?    @map("locked_at")
+  lockedById         String?      @map("locked_by_id")
+  unlockReason       String?      @map("unlock_reason")
+  createdAt          DateTime     @default(now()) @map("created_at")
 
-  organization    Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  defaultFactorSet EmissionFactorSet?       @relation(fields: [defaultFactorSetId], references: [id])
-  activityRecords ActivityRecord[]
-  assignments     QuestionnaireAssignment[]
-  reports         Report[]
+  organization     Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  defaultFactorSet EmissionFactorSet?        @relation(fields: [defaultFactorSetId], references: [id])
+  activityRecords  ActivityRecord[]
+  assignments      QuestionnaireAssignment[]
+  reports          Report[]
 
   @@unique([organizationId, label])
   @@map("reporting_periods")
@@ -555,17 +570,17 @@ model ReportingPeriod {
 // ─────────────────────────────── factors ───────────────────────────────
 
 model EmissionFactorSet {
-  id             String   @id @default(uuid())
-  organizationId String?  @map("organization_id") // null = shared/global set
+  id             String    @id @default(uuid())
+  organizationId String?   @map("organization_id") // null = shared/global set
   publisher      String
   name           String
   version        String
   publishedOn    DateTime? @map("published_on") @db.Date
-  regionScope    String?  @map("region_scope")
+  regionScope    String?   @map("region_scope")
   licence        String?
-  sourceUrl      String?  @map("source_url")
-  isActive       Boolean  @default(true) @map("is_active")
-  createdAt      DateTime @default(now()) @map("created_at")
+  sourceUrl      String?   @map("source_url")
+  isActive       Boolean   @default(true) @map("is_active")
+  createdAt      DateTime  @default(now()) @map("created_at")
 
   organization Organization?     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   factors      EmissionFactor[]
@@ -578,31 +593,31 @@ model EmissionFactorSet {
 
 /// Immutable once referenced. Corrections create a new row with a new validFrom.
 model EmissionFactor {
-  id                String        @id @default(uuid())
-  factorSetId       String        @map("factor_set_id")
-  scope             Scope
-  scope3Category    Int?          @map("scope3_category")
-  activityType      ActivityType  @map("activity_type")
-  method            CalcMethod
-  fuelOrMaterialCode String       @map("fuel_or_material_code")
-  region            String        @default("GLOBAL")
-  gas               Gas           @default(CO2E_BLENDED)
-  basis             EmissionBasis @default(SINGLE)
-  value             Decimal       @db.Decimal(24, 12)
-  unitNumerator     UnitCode      @map("unit_numerator")
-  unitDenominator   UnitCode      @map("unit_denominator")
+  id                 String        @id @default(uuid())
+  factorSetId        String        @map("factor_set_id")
+  scope              Scope
+  scope3Category     Int?          @map("scope3_category")
+  activityType       ActivityType  @map("activity_type")
+  method             CalcMethod
+  fuelOrMaterialCode String        @map("fuel_or_material_code")
+  region             String        @default("GLOBAL")
+  gas                Gas           @default(CO2E_BLENDED)
+  basis              EmissionBasis @default(SINGLE)
+  value              Decimal       @db.Decimal(24, 12)
+  unitNumerator      UnitCode      @map("unit_numerator")
+  unitDenominator    UnitCode      @map("unit_denominator")
   /// for CURRENCY denominators — the price year the factor is expressed in
-  currencyYear      Int?          @map("currency_year")
-  validFrom         DateTime      @map("valid_from") @db.Date
-  validTo           DateTime?     @map("valid_to") @db.Date
-  sourceCitation    String        @map("source_citation")
-  uncertaintyPct    Decimal?      @map("uncertainty_pct") @db.Decimal(9, 4)
-  supersededById    String?       @unique @map("superseded_by_id")
-  createdAt         DateTime      @default(now()) @map("created_at")
+  currencyYear       Int?          @map("currency_year")
+  validFrom          DateTime      @map("valid_from") @db.Date
+  validTo            DateTime?     @map("valid_to") @db.Date
+  sourceCitation     String        @map("source_citation")
+  uncertaintyPct     Decimal?      @map("uncertainty_pct") @db.Decimal(9, 4)
+  supersededById     String?       @unique @map("superseded_by_id")
+  createdAt          DateTime      @default(now()) @map("created_at")
 
-  factorSet     EmissionFactorSet @relation(fields: [factorSetId], references: [id], onDelete: Cascade)
-  supersededBy  EmissionFactor?   @relation("Supersession", fields: [supersededById], references: [id])
-  supersedes    EmissionFactor?   @relation("Supersession")
+  factorSet       EmissionFactorSet @relation(fields: [factorSetId], references: [id], onDelete: Cascade)
+  supersededBy    EmissionFactor?   @relation("Supersession", fields: [supersededById], references: [id])
+  supersedes      EmissionFactor?   @relation("Supersession")
   emissionRecords EmissionRecord[]
 
   @@index([activityType, method, fuelOrMaterialCode, region, validFrom])
@@ -611,11 +626,11 @@ model EmissionFactor {
 }
 
 model GwpSet {
-  id        String   @id @default(uuid())
+  id        String  @id @default(uuid())
   name      String
   gas       Gas
-  gwp100    Decimal  @map("gwp_100") @db.Decimal(20, 6)
-  isDefault Boolean  @default(false) @map("is_default")
+  gwp100    Decimal @map("gwp_100") @db.Decimal(20, 6)
+  isDefault Boolean @default(false) @map("is_default")
 
   @@unique([name, gas])
   @@map("gwp_sets")
@@ -626,7 +641,7 @@ model FuelProperty {
   id             String    @id @default(uuid())
   organizationId String?   @map("organization_id")
   fuelCode       String    @map("fuel_code")
-  property       String    // "density" | "ncv"
+  property       String // "density" | "ncv"
   value          Decimal   @db.Decimal(24, 12)
   fromUnit       UnitCode  @map("from_unit")
   toUnit         UnitCode  @map("to_unit")
@@ -681,23 +696,23 @@ model QuestionnaireSection {
 }
 
 model Question {
-  id                     String        @id @default(uuid())
-  sectionId              String        @map("section_id")
+  id                     String         @id @default(uuid())
+  sectionId              String         @map("section_id")
   code                   String
   label                  String
-  helpText               String?       @map("help_text")
-  inputType              InputType     @default(NUMBER_WITH_UNIT) @map("input_type")
+  helpText               String?        @map("help_text")
+  inputType              InputType      @default(NUMBER_WITH_UNIT) @map("input_type")
   unitDimension          UnitDimension? @map("unit_dimension")
-  allowedUnits           UnitCode[]    @map("allowed_units")
+  allowedUnits           UnitCode[]     @map("allowed_units")
   options                Json?
   columns                Json?
-  isRequired             Boolean       @default(true) @map("is_required")
-  evidenceRequired       Boolean       @default(false) @map("evidence_required")
-  allowNotApplicable     Boolean       @default(true) @map("allow_not_applicable")
-  visibleIf              Json?         @map("visible_if")
-  prefillFromPriorPeriod Boolean       @default(true) @map("prefill_from_prior_period")
-  sortOrder              Int           @default(0) @map("sort_order")
-  libraryQuestionId      String?       @map("library_question_id")
+  isRequired             Boolean        @default(true) @map("is_required")
+  evidenceRequired       Boolean        @default(false) @map("evidence_required")
+  allowNotApplicable     Boolean        @default(true) @map("allow_not_applicable")
+  visibleIf              Json?          @map("visible_if")
+  prefillFromPriorPeriod Boolean        @default(true) @map("prefill_from_prior_period")
+  sortOrder              Int            @default(0) @map("sort_order")
+  libraryQuestionId      String?        @map("library_question_id")
 
   section QuestionnaireSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
   binding FactorBinding?
@@ -731,8 +746,8 @@ model FactorBinding {
   healthCheckedAt    DateTime?      @map("health_checked_at")
   healthMessage      String?        @map("health_message")
 
-  question         Question           @relation(fields: [questionId], references: [id], onDelete: Cascade)
-  pinnedFactorSet  EmissionFactorSet? @relation(fields: [pinnedFactorSetId], references: [id])
+  question        Question           @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  pinnedFactorSet EmissionFactorSet? @relation(fields: [pinnedFactorSetId], references: [id])
 
   @@index([health])
   @@map("factor_bindings")
@@ -833,29 +848,29 @@ model ActivityRecord {
 /// The computed result. EVERY input is snapshotted so past reports are reproducible
 /// forever, even after the referenced factor is superseded or deleted. See SPEC.md §3.5.
 model EmissionRecord {
-  id                    String        @id @default(uuid())
-  activityRecordId      String        @map("activity_record_id")
-  basis                 EmissionBasis @default(SINGLE)
-  gas                   Gas           @default(CO2E_BLENDED)
+  id               String        @id @default(uuid())
+  activityRecordId String        @map("activity_record_id")
+  basis            EmissionBasis @default(SINGLE)
+  gas              Gas           @default(CO2E_BLENDED)
 
   // --- snapshotted inputs ---
-  quantityNormalised    Decimal       @map("quantity_normalised") @db.Decimal(24, 12)
-  unitNormalised        UnitCode      @map("unit_normalised")
-  unitConversionFactor  Decimal       @map("unit_conversion_factor") @db.Decimal(24, 12)
-  factorId              String?       @map("factor_id")
-  factorValue           Decimal       @map("factor_value") @db.Decimal(24, 12)
-  factorUnitNumerator   UnitCode      @map("factor_unit_numerator")
-  factorUnitDenominator UnitCode      @map("factor_unit_denominator")
-  factorSource          String        @map("factor_source")
-  factorVersion         String        @map("factor_version")
-  factorValidFrom       DateTime      @map("factor_valid_from") @db.Date
-  factorValidTo         DateTime?     @map("factor_valid_to") @db.Date
-  gwpValue              Decimal       @map("gwp_value") @db.Decimal(20, 6)
-  gwpSet                String        @map("gwp_set")
-  consolidationShare    Decimal       @map("consolidation_share") @db.Decimal(9, 6)
+  quantityNormalised    Decimal   @map("quantity_normalised") @db.Decimal(24, 12)
+  unitNormalised        UnitCode  @map("unit_normalised")
+  unitConversionFactor  Decimal   @map("unit_conversion_factor") @db.Decimal(24, 12)
+  factorId              String?   @map("factor_id")
+  factorValue           Decimal   @map("factor_value") @db.Decimal(24, 12)
+  factorUnitNumerator   UnitCode  @map("factor_unit_numerator")
+  factorUnitDenominator UnitCode  @map("factor_unit_denominator")
+  factorSource          String    @map("factor_source")
+  factorVersion         String    @map("factor_version")
+  factorValidFrom       DateTime  @map("factor_valid_from") @db.Date
+  factorValidTo         DateTime? @map("factor_valid_to") @db.Date
+  gwpValue              Decimal   @map("gwp_value") @db.Decimal(20, 6)
+  gwpSet                String    @map("gwp_set")
+  consolidationShare    Decimal   @map("consolidation_share") @db.Decimal(9, 6)
   /// days of the activity period this record covers (mid-year factor splits)
-  daysCovered           Int           @default(0) @map("days_covered")
-  daysTotal             Int           @default(0) @map("days_total")
+  daysCovered           Int       @default(0) @map("days_covered")
+  daysTotal             Int       @default(0) @map("days_total")
 
   // --- output ---
   emissionsKgCo2e   Decimal  @map("emissions_kg_co2e") @db.Decimal(24, 6)
@@ -992,4 +1007,50 @@ model ImportBatch {
 
   @@index([organizationId, status])
   @@map("import_batches")
+}
+
+// ─────────────────────────────── positions ───────────────────────────────
+// SPEC.md / GHG Intelligence Platform blueprint P53. A position is a stable
+// responsibility ("Site Data Owner, Ashford Data Centre") independent of
+// whoever currently holds it. Work assigns to the position; the position's
+// current PositionAssignment resolves who actually gets notified. Losing an
+// incumbent doesn't lose the responsibility — it just needs reassigning.
+
+model Position {
+  id             String       @id @default(uuid())
+  organizationId String       @map("organization_id")
+  title          String
+  type           PositionType
+  /// null = an organisation-wide position, not tied to one site
+  siteId         String?      @map("site_id")
+  description    String?
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  site         Site?                @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  assignments  PositionAssignment[]
+
+  @@index([organizationId, siteId])
+  @@map("positions")
+}
+
+/// One incumbency. endedOn null = current holder. Never delete a row —
+/// end it and create a new one, so historical work always resolves to
+/// whoever actually held the position when it happened.
+model PositionAssignment {
+  id          String    @id @default(uuid())
+  positionId  String    @map("position_id")
+  userId      String    @map("user_id")
+  isBackup    Boolean   @default(false) @map("is_backup")
+  startedOn   DateTime  @default(now()) @map("started_on")
+  endedOn     DateTime? @map("ended_on")
+  reason      String?
+  createdById String?   @map("created_by_id")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  position Position @relation(fields: [positionId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([positionId, endedOn])
+  @@map("position_assignments")
 }

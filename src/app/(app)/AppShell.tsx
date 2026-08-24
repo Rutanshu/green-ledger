@@ -23,6 +23,7 @@ const NAV_WORKFLOW = [
 
 const NAV_ADMIN = [
   { href: "/organisation", label: "Organisation", icon: "◱", requires: "manage_org" as const },
+  { href: "/positions", label: "Positions", icon: "🧑‍💼", requires: "manage_sites" as const },
   { href: "/periods", label: "Periods", icon: "◔" },
   { href: "/labels", label: "Labels", icon: "🏷" },
   { href: "/users", label: "Users & roles", icon: "☖", requires: "manage_users" as const },
