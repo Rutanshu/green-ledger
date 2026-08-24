@@ -261,7 +261,10 @@ export async function submitAnswer(_prev: SubmitAnswerState, formData: FormData)
     });
 
     return { calcWarning, emissionResults };
-  });
+  }, { timeout: 15000, maxWait: 10000 }); // Neon's scale-to-zero cold start alone can take 2-3s; the
+  // default 5s transaction budget leaves no room for the several
+  // queries this transaction actually runs on top of that. Measured
+  // directly: 2.4s cold vs 0.2s warm for a single query.
 
   revalidatePath("/data-collection");
   revalidatePath("/");

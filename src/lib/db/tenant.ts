@@ -88,12 +88,17 @@ export function orgScopedClient(orgId: string) {
 
           // Every operation runs inside its own transaction so SET LOCAL and
           // the query itself share one connection — required for RLS to see it.
-          return rawPrisma.$transaction(async (tx) => {
-            await tx.$executeRawUnsafe(`SET LOCAL app.org_id = '${escapedOrgId}'`);
-            const accessor = model.charAt(0).toLowerCase() + model.slice(1);
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            return (tx as any)[accessor][operation](scopedArgs);
-          });
+          return rawPrisma.$transaction(
+            async (tx) => {
+              await tx.$executeRawUnsafe(`SET LOCAL app.org_id = '${escapedOrgId}'`);
+              const accessor = model.charAt(0).toLowerCase() + model.slice(1);
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              return (tx as any)[accessor][operation](scopedArgs);
+            },
+            // Neon's scale-to-zero cold start can itself take 2-3s, which the
+            // default 5s transaction budget doesn't leave much room around.
+            { timeout: 15000, maxWait: 10000 },
+          );
         },
       },
     },
@@ -115,8 +120,11 @@ export async function withOrgTransaction<T>(
 ): Promise<T> {
   if (!orgId) throw new Error('withOrgTransaction() requires a non-empty organisation id.');
   const escapedOrgId = orgId.replace(/'/g, "''");
-  return rawPrisma.$transaction(async (tx) => {
-    await tx.$executeRawUnsafe(`SET LOCAL app.org_id = '${escapedOrgId}'`);
-    return fn(tx);
-  });
+  return rawPrisma.$transaction(
+    async (tx) => {
+      await tx.$executeRawUnsafe(`SET LOCAL app.org_id = '${escapedOrgId}'`);
+      return fn(tx);
+    },
+    { timeout: 15000, maxWait: 10000 },
+  );
 }
