@@ -100,8 +100,10 @@ export const SYSTEM_DEFAULTS: Record<LabelEntityKind, Record<string, SystemDefau
   SECTION: {},
   QUESTION: {},
   ROLE: {
-    OWNER: { label: 'Owner' }, ADMIN: { label: 'Admin' }, CONTRIBUTOR: { label: 'Contributor' },
-    APPROVER: { label: 'Approver' }, AUDITOR: { label: 'Auditor' },
+    SUPER_ADMIN: { label: 'Super Admin', description: 'Everything, including Organisation and Users & roles.' },
+    DATA_MANAGER: { label: 'Data Manager', description: 'Sites, Factor Lab, Builder, Tasks, Data Collection.' },
+    DATA_INPUTTER: { label: 'Data Inputter', description: 'Data Collection only.' },
+    READ_ONLY: { label: 'Read Only', description: 'View everywhere, no writes.' },
   },
   DOCUMENT_TYPE: {
     INVOICE: { label: 'Invoice' }, METER_READ: { label: 'Meter read' }, CONTRACT: { label: 'Contract' },

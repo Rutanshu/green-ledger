@@ -2,6 +2,8 @@
 
 import { useActionState, useState } from "react";
 import { upsertBinding } from "./actions";
+import { labelText } from "@/components/Label";
+import type { LabelOverride } from "@/lib/labels";
 
 const ACTIVITY_TYPES = [
   "STATIONARY_COMBUSTION", "MOBILE_COMBUSTION", "FUGITIVE", "PROCESS", "PURCHASED_ELECTRICITY",
@@ -24,7 +26,15 @@ interface Existing {
   health: string;
 }
 
-export function BindingForm({ questionId, existing }: { questionId: string; existing: Existing | null }) {
+export function BindingForm({
+  questionId,
+  existing,
+  labelOverrides,
+}: {
+  questionId: string;
+  existing: Existing | null;
+  labelOverrides: readonly LabelOverride[];
+}) {
   const [state, formAction, pending] = useActionState(upsertBinding, null);
   const [open, setOpen] = useState(!existing);
 
@@ -60,12 +70,12 @@ export function BindingForm({ questionId, existing }: { questionId: string; exis
         </select>
         <select name="activityType" defaultValue={existing?.activityType ?? "STATIONARY_COMBUSTION"} className="rounded border border-border bg-surface px-1.5 py-1 text-[11px]">
           {ACTIVITY_TYPES.map((a) => (
-            <option key={a} value={a}>{a.replaceAll("_", " ").toLowerCase()}</option>
+            <option key={a} value={a}>{labelText("ACTIVITY_TYPE", a, labelOverrides)}</option>
           ))}
         </select>
         <select name="method" defaultValue={existing?.method ?? "FUEL_BASED"} className="rounded border border-border bg-surface px-1.5 py-1 text-[11px]">
           {METHODS.map((m) => (
-            <option key={m} value={m}>{m.replaceAll("_", " ").toLowerCase()}</option>
+            <option key={m} value={m}>{labelText("METHOD", m, labelOverrides)}</option>
           ))}
         </select>
         <input

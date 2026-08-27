@@ -2,6 +2,8 @@
 
 import { useActionState } from "react";
 import { submitAnswer } from "./actions";
+import { labelText } from "@/components/Label";
+import type { LabelOverride } from "@/lib/labels";
 
 interface Props {
   assignmentId: string;
@@ -11,11 +13,12 @@ interface Props {
   existing: { value: string; unit: string; quality: string } | null;
   existingEmissionsKg: string | null;
   canEdit: boolean;
+  labelOverrides: readonly LabelOverride[];
 }
 
 const QUALITIES = ["MEASURED", "CALCULATED", "ESTIMATED", "PROXY"];
 
-export function AnswerRow({ assignmentId, questionId, code, allowedUnits, existing, existingEmissionsKg, canEdit }: Props) {
+export function AnswerRow({ assignmentId, questionId, code, allowedUnits, existing, existingEmissionsKg, canEdit, labelOverrides }: Props) {
   const [state, formAction, pending] = useActionState(submitAnswer, null);
 
   const emissionsKg = state?.ok ? state.emissionsKgCo2e ?? null : existingEmissionsKg;
@@ -29,7 +32,7 @@ export function AnswerRow({ assignmentId, questionId, code, allowedUnits, existi
         </td>
         <td className="px-4 py-2 text-xs text-ink2">
           {existing ? (
-            `${existing.value} ${existing.unit} · ${existing.quality}`
+            `${existing.value} ${existing.unit} · ${labelText("DATA_QUALITY", existing.quality, labelOverrides)}`
           ) : (
             <span className="text-muted">not answered</span>
           )}
@@ -80,7 +83,7 @@ export function AnswerRow({ assignmentId, questionId, code, allowedUnits, existi
           >
             {QUALITIES.map((q) => (
               <option key={q} value={q}>
-                {q}
+                {labelText("DATA_QUALITY", q, labelOverrides)}
               </option>
             ))}
           </select>

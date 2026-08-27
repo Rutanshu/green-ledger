@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { getCurrentMembership } from "@/lib/demo-org";
 import { orgScopedClient } from "@/lib/db/tenant";
 import { can } from "@/lib/auth/permissions";
+import { getOrgLabelOverrides } from "@/lib/labels/getOrgOverrides";
+import { Label } from "@/components/Label";
 import { SectionForm } from "../SectionForm";
 import { QuestionForm } from "../QuestionForm";
 import { BindingForm } from "../BindingForm";
@@ -30,15 +32,18 @@ export default async function TemplateEditorPage({ params }: { params: Promise<{
   const canEdit = can(membership.role, "manage_questionnaire");
   const db = orgScopedClient(membership.org.id);
 
-  const template = await db.questionnaireTemplate.findFirst({
-    where: { id: templateId },
-    include: {
-      sections: {
-        orderBy: { sortOrder: "asc" },
-        include: { questions: { orderBy: { sortOrder: "asc" }, include: { binding: true } } },
+  const [template, labelOverrides] = await Promise.all([
+    db.questionnaireTemplate.findFirst({
+      where: { id: templateId },
+      include: {
+        sections: {
+          orderBy: { sortOrder: "asc" },
+          include: { questions: { orderBy: { sortOrder: "asc" }, include: { binding: true } } },
+        },
       },
-    },
-  });
+    }),
+    getOrgLabelOverrides(membership.org.id),
+  ]);
   if (!template) notFound();
 
   const questionCount = template.sections.reduce((n, s) => n + s.questions.length, 0);
@@ -76,7 +81,7 @@ export default async function TemplateEditorPage({ params }: { params: Promise<{
               <div>
                 <div className="font-semibold">{section.title}</div>
                 <div className="mt-0.5 text-[13px] text-ink2">
-                  {section.scope.replaceAll("_", " ")}
+                  <Label entityKind="SCOPE" code={section.scope} overrides={labelOverrides} />
                   {section.scope3Category ? ` · category ${section.scope3Category}` : ""}
                 </div>
               </div>
@@ -131,6 +136,7 @@ export default async function TemplateEditorPage({ params }: { params: Promise<{
                             }
                           : null
                       }
+                      labelOverrides={labelOverrides}
                     />
                   )}
                 </div>

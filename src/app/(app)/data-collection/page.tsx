@@ -1,6 +1,8 @@
 import { getCurrentMembership } from "@/lib/demo-org";
 import { orgScopedClient } from "@/lib/db/tenant";
 import { can } from "@/lib/auth/permissions";
+import { getOrgLabelOverrides } from "@/lib/labels/getOrgOverrides";
+import { Label } from "@/components/Label";
 import { AnswerRow } from "./AnswerRow";
 
 export const dynamic = "force-dynamic";
@@ -11,6 +13,7 @@ export default async function DataCollectionPage() {
   const org = membership.org;
   const canEdit = can(membership.role, "submit_answers");
   const db = orgScopedClient(org.id);
+  const labelOverrides = await getOrgLabelOverrides(org.id);
 
   const sites = await db.site.findMany({
     orderBy: { code: "asc" },
@@ -54,7 +57,8 @@ export default async function DataCollectionPage() {
                 </div>
                 {assignment && (
                   <div className="mt-0.5 text-[13px] text-ink2">
-                    {assignment.status.replaceAll("_", " ")} · {assignment.completenessPct.toString()}% complete
+                    <Label entityKind="STATUS" code={assignment.status} overrides={labelOverrides} /> ·{" "}
+                    {assignment.completenessPct.toString()}% complete
                   </div>
                 )}
               </div>
@@ -85,6 +89,7 @@ export default async function DataCollectionPage() {
                             existing={a ? { value: a.valueNumeric?.toString() ?? "", unit: a.unit ?? "", quality: a.dataQuality ?? "ESTIMATED" } : null}
                             existingEmissionsKg={emissionRecords.length > 0 ? totalKg.toString() : null}
                             canEdit={canEdit}
+                            labelOverrides={labelOverrides}
                           />
                         );
                       })}

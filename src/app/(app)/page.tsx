@@ -2,6 +2,8 @@ import Link from "next/link";
 import { getCurrentOrg } from "@/lib/demo-org";
 import { orgScopedClient, withOrgTransaction } from "@/lib/db/tenant";
 import { toTonnes } from "@/lib/calc";
+import { getOrgLabelOverrides } from "@/lib/labels/getOrgOverrides";
+import { Label } from "@/components/Label";
 import Decimal from "decimal.js";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +21,7 @@ async function getDashboardData() {
   if (!org) return null;
 
   const db = orgScopedClient(org.id);
-  const [sites, template, emissionsAgg] = await Promise.all([
+  const [sites, template, emissionsAgg, labelOverrides] = await Promise.all([
     db.site.findMany({ include: { assignments: true }, orderBy: { code: "asc" } }),
     db.questionnaireTemplate.findFirst({
       where: { status: "PUBLISHED" },
@@ -38,6 +40,8 @@ async function getDashboardData() {
         _count: true,
       }),
     ),
+    // fetched once per page, not once per <Label> — see components/Label.tsx
+    getOrgLabelOverrides(org.id),
   ]);
 
   const bindings = (template?.sections ?? [])
@@ -63,6 +67,7 @@ async function getDashboardData() {
     avgCompleteness,
     emissionRecordCount: emissionsAgg._count,
     emissionsTonnes: toTonnes(emissionsKg),
+    labelOverrides,
   };
 }
 
@@ -89,7 +94,7 @@ export default async function Home() {
     );
   }
 
-  const { sites, bindingCount, issues, reporting, avgCompleteness, emissionRecordCount, emissionsTonnes } = data;
+  const { sites, bindingCount, issues, reporting, avgCompleteness, emissionRecordCount, emissionsTonnes, labelOverrides } = data;
 
   return (
     <>
@@ -143,7 +148,7 @@ export default async function Home() {
                   <td className="px-4 py-2.5">
                     {assignment ? (
                       <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLE[assignment.status]}`}>
-                        {assignment.status.replaceAll("_", " ")}
+                        <Label entityKind="STATUS" code={assignment.status} overrides={labelOverrides} />
                       </span>
                     ) : (
                       <span className="text-muted">—</span>

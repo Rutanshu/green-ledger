@@ -1,6 +1,8 @@
 import { getCurrentMembership } from "@/lib/demo-org";
 import { orgScopedClient } from "@/lib/db/tenant";
 import { can } from "@/lib/auth/permissions";
+import { getOrgLabelOverrides } from "@/lib/labels/getOrgOverrides";
+import { Label } from "@/components/Label";
 import { retestBinding } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +21,7 @@ export default async function FactorLabPage() {
   const canManage = can(membership.role, "manage_factors");
   const db = orgScopedClient(org.id);
 
-  const [factorSets, template] = await Promise.all([
+  const [factorSets, template, labelOverrides] = await Promise.all([
     db.emissionFactorSet.findMany({
       include: { factors: { orderBy: { fuelOrMaterialCode: "asc" } } },
       orderBy: { publisher: "asc" },
@@ -30,6 +32,7 @@ export default async function FactorLabPage() {
         sections: { include: { questions: { include: { binding: true } } } },
       },
     }),
+    getOrgLabelOverrides(org.id),
   ]);
 
   const bindings = (template?.sections ?? [])
@@ -59,7 +62,9 @@ export default async function FactorLabPage() {
             {bindings.map(({ question, binding }) => (
               <tr key={binding.id} className="border-b border-grid last:border-0">
                 <td className="px-4 py-2.5 font-medium">{question.code}</td>
-                <td className="px-4 py-2.5 text-ink2">{binding.activityType.replaceAll("_", " ").toLowerCase()}</td>
+                <td className="px-4 py-2.5 text-ink2">
+                  <Label entityKind="ACTIVITY_TYPE" code={binding.activityType} overrides={labelOverrides} />
+                </td>
                 <td className="px-4 py-2.5 text-ink2">{binding.fuelOrMaterialCode}</td>
                 <td className="px-4 py-2.5 text-ink2">{binding.regionStrategy.replaceAll("_", " ").toLowerCase()}</td>
                 <td className="px-4 py-2.5">
@@ -111,7 +116,9 @@ export default async function FactorLabPage() {
                 {set.factors.map((f) => (
                   <tr key={f.id} className="border-t border-grid">
                     <td className="px-4 py-2 font-medium">{f.fuelOrMaterialCode}</td>
-                    <td className="px-4 py-2 text-ink2">{f.activityType.replaceAll("_", " ").toLowerCase()}</td>
+                    <td className="px-4 py-2 text-ink2">
+                      <Label entityKind="ACTIVITY_TYPE" code={f.activityType} overrides={labelOverrides} />
+                    </td>
                     <td className="px-4 py-2 text-ink2">{f.region}</td>
                     <td className="px-4 py-2 text-ink2">{Number(f.value).toLocaleString()}</td>
                     <td className="px-4 py-2 text-ink2 font-mono text-xs">
