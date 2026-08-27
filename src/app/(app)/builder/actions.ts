@@ -10,6 +10,11 @@ import { recordAudit } from "@/lib/audit";
 import { checkBindingHealth } from "@/lib/factors";
 import { buildFactorCandidates } from "@/lib/db/factor-candidates";
 import type { UnitDimension } from "@/lib/units";
+import {
+  parseFormula, checkFormulaDimension, extractDependencies, checkForCycle,
+  dimensionOfBase, DIMENSIONLESS, formatDimension, FormulaSyntaxError, DimensionMismatchError, CycleError,
+  type Dimension,
+} from "@/lib/formula";
 
 type ActionState = { ok: boolean; error?: string } | null;
 
@@ -201,12 +206,97 @@ const QuestionInput = z.object({
   code: z.string().regex(/^[a-z][a-z0-9_]*$/, "Code must be lowercase_with_underscores, starting with a letter."),
   label: z.string().min(1, "Give the question a label."),
   helpText: z.string().optional(),
-  inputType: z.enum(["NUMBER_WITH_UNIT", "NUMBER", "TEXT", "SINGLE_SELECT", "MULTI_SELECT", "DATE", "BOOLEAN"]),
+  inputType: z.enum(["NUMBER_WITH_UNIT", "NUMBER", "TEXT", "SINGLE_SELECT", "MULTI_SELECT", "DATE", "BOOLEAN", "INDICATOR"]),
   unitDimension: z.string().optional(),
   allowedUnits: z.array(z.string()).optional(),
   options: z.string().optional(), // comma-separated, for SINGLE_SELECT/MULTI_SELECT
   isRequired: z.coerce.boolean().optional(),
+  formula: z.string().optional(), // INDICATOR only
 });
+
+/**
+ * A question is a valid formula dependency only if it has a known,
+ * numeric dimension: NUMBER_WITH_UNIT (its real unitDimension), NUMBER
+ * (dimensionless), or another INDICATOR (its checked computedDimensionJson).
+ * Anything else (TEXT, BOOLEAN, a select...) has no numeric value to
+ * compute with and is excluded from the lookup entirely, so referencing
+ * one is reported as "unknown identifier" rather than silently coercing it.
+ */
+function buildIdentifierDimensions(
+  templateQuestions: readonly { code: string; inputType: string; unitDimension: string | null; computedDimensionJson: unknown }[],
+): Record<string, Dimension> {
+  const out: Record<string, Dimension> = {};
+  for (const q of templateQuestions) {
+    if (q.inputType === "NUMBER_WITH_UNIT" && q.unitDimension) {
+      out[q.code] = dimensionOfBase(q.unitDimension as UnitDimension);
+    } else if (q.inputType === "NUMBER") {
+      out[q.code] = DIMENSIONLESS;
+    } else if (q.inputType === "INDICATOR" && q.computedDimensionJson) {
+      out[q.code] = q.computedDimensionJson as Dimension;
+    }
+  }
+  return out;
+}
+
+/**
+ * Parses, dimension-checks and cycle-checks a candidate indicator formula
+ * against every OTHER question already in the template — "a cycle is
+ * rejected at save time, not discovered mid-calculation" and "kWh + L is
+ * rejected at parse time" (GHG_TOOL_ARCHITECTURE.md §10). Never persists
+ * anything; the caller does that only once this returns ok.
+ */
+function validateIndicatorFormula(
+  code: string,
+  formulaSource: string,
+  templateQuestions: readonly {
+    code: string;
+    inputType: string;
+    unitDimension: string | null;
+    formula: string | null;
+    computedDimensionJson: unknown;
+  }[],
+): { ok: true; dimension: Dimension } | { ok: false; error: string } {
+  let ast;
+  try {
+    ast = parseFormula(formulaSource);
+  } catch (err) {
+    return { ok: false, error: err instanceof FormulaSyntaxError ? err.message : "Invalid formula." };
+  }
+
+  const deps = extractDependencies(ast);
+  const known = new Set(templateQuestions.map((q) => q.code));
+  const missing = deps.filter((d) => !known.has(d));
+  if (missing.length > 0) {
+    return { ok: false, error: `Formula references unknown question(s) in this template: ${missing.join(", ")}.` };
+  }
+
+  // Cycle check: every existing indicator's own dependencies, plus this
+  // candidate's, as one edge set.
+  const edges = new Map<string, string[]>();
+  for (const q of templateQuestions) {
+    if (q.inputType === "INDICATOR" && q.formula) {
+      try {
+        edges.set(q.code, extractDependencies(parseFormula(q.formula)));
+      } catch {
+        edges.set(q.code, []); // an already-broken existing formula shouldn't block validating a new one
+      }
+    }
+  }
+  edges.set(code, deps);
+  try {
+    checkForCycle(edges);
+  } catch (err) {
+    return { ok: false, error: err instanceof CycleError ? err.message : "Formula dependency cycle." };
+  }
+
+  const identifierDimension = buildIdentifierDimensions(templateQuestions);
+  try {
+    const dimension = checkFormulaDimension(ast, identifierDimension);
+    return { ok: true, dimension };
+  } catch (err) {
+    return { ok: false, error: err instanceof DimensionMismatchError ? err.message : (err as Error).message };
+  }
+}
 
 export async function createQuestion(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const auth = await requireBuilder();
@@ -227,22 +317,33 @@ export async function createQuestion(_prev: ActionState, formData: FormData): Pr
   if ((d.inputType === "SINGLE_SELECT" || d.inputType === "MULTI_SELECT") && !d.options?.trim()) {
     return { ok: false, error: "Give at least one option (comma-separated)." };
   }
+  if (d.inputType === "INDICATOR" && !d.formula?.trim()) {
+    return { ok: false, error: "An indicator needs a formula." };
+  }
 
   const orgId = auth.membership.org.id;
   const db = orgScopedClient(orgId);
   const section = await db.questionnaireSection.findFirst({
     where: { id: d.sectionId },
-    include: { questions: true },
+    include: { questions: true, template: { include: { sections: { include: { questions: true } } } } },
   });
   if (!section) return { ok: false, error: "Section not found." };
-  if (section.questions.some((q) => q.code === d.code)) {
-    return { ok: false, error: `Code "${d.code}" is already used in this section.` };
+  const templateQuestions = section.template.sections.flatMap((s) => s.questions);
+  if (templateQuestions.some((q) => q.code === d.code)) {
+    return { ok: false, error: `Code "${d.code}" is already used in this template.` };
   }
 
   const options =
     d.inputType === "SINGLE_SELECT" || d.inputType === "MULTI_SELECT"
       ? d.options!.split(",").map((s) => s.trim()).filter(Boolean).map((v) => ({ code: v, label: v }))
       : undefined;
+
+  let indicatorDimension: Dimension | null = null;
+  if (d.inputType === "INDICATOR") {
+    const result = validateIndicatorFormula(d.code, d.formula!, templateQuestions);
+    if (!result.ok) return { ok: false, error: result.error };
+    indicatorDimension = result.dimension;
+  }
 
   const question = await withOrgTransaction(orgId, async (tx) => {
     const q = await tx.question.create({
@@ -255,8 +356,11 @@ export async function createQuestion(_prev: ActionState, formData: FormData): Pr
         unitDimension: d.inputType === "NUMBER_WITH_UNIT" ? (d.unitDimension as UnitDimension) : null,
         allowedUnits: d.inputType === "NUMBER_WITH_UNIT" ? (d.allowedUnits as never[]) : [],
         options: options ?? undefined,
-        isRequired: d.isRequired ?? true,
+        isRequired: d.inputType === "INDICATOR" ? false : (d.isRequired ?? true),
         sortOrder: section.questions.length,
+        formula: d.inputType === "INDICATOR" ? d.formula : null,
+        computedDimension: indicatorDimension ? formatDimension(indicatorDimension) : null,
+        computedDimensionJson: indicatorDimension ?? undefined,
       },
     });
     await recordAudit(tx, {

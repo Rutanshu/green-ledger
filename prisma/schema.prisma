@@ -178,6 +178,9 @@ enum InputType {
   BOOLEAN
   FILE
   REPEATING_TABLE
+  /// Computed by lib/formula/ from other questions in the same template —
+  /// never collected from a person. See Question.formula.
+  INDICATOR
 }
 
 enum UnitDimension {
@@ -714,6 +717,20 @@ model Question {
   prefillFromPriorPeriod Boolean        @default(true) @map("prefill_from_prior_period")
   sortOrder              Int            @default(0) @map("sort_order")
   libraryQuestionId      String?        @map("library_question_id")
+  /// INDICATOR only — a lib/formula/ source string. Parsed, dimension-
+  /// checked and cycle-checked at save time (builder/actions.ts), never
+  /// eval'd. Null for every other input type.
+  formula                String?
+  /// INDICATOR only — formatDimension() of the formula's checked result,
+  /// e.g. "EMISSIONS · CURRENCY^-1". Display only; a composite/intensity
+  /// dimension often has no single UnitDimension to store it as.
+  computedDimension      String?        @map("computed_dimension")
+  /// INDICATOR only — the structured lib/formula Dimension power-map (e.g.
+  /// { "EMISSIONS": 1, "CURRENCY": -1 }), not just its display string.
+  /// Needed so an indicator that references ANOTHER indicator can be
+  /// dimension-checked correctly, rather than treating every referenced
+  /// indicator as an opaque, unverifiable dimension.
+  computedDimensionJson  Json?          @map("computed_dimension_json")
 
   section QuestionnaireSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
   binding FactorBinding?

@@ -103,8 +103,12 @@ export default async function TemplateEditorPage({ params }: { params: Promise<{
                         <span className="font-mono">{q.code}</span>
                         <span>· {q.inputType.replaceAll("_", " ").toLowerCase()}</span>
                         {q.inputType === "NUMBER_WITH_UNIT" && <span>· {q.allowedUnits.join("/")}</span>}
+                        {q.inputType === "INDICATOR" && q.computedDimension && <span>· {q.computedDimension}</span>}
                         {q.isRequired && <span>· required</span>}
                       </div>
+                      {q.inputType === "INDICATOR" && q.formula && (
+                        <div className="mt-1 rounded bg-track px-2 py-1 font-mono text-[11px] text-ink2">{q.formula}</div>
+                      )}
                     </div>
                     <div className="flex items-center gap-2">
                       {q.binding && (
@@ -119,7 +123,7 @@ export default async function TemplateEditorPage({ params }: { params: Promise<{
                       )}
                     </div>
                   </div>
-                  {canEdit && (
+                  {canEdit && q.inputType !== "INDICATOR" && (
                     <BindingForm
                       questionId={q.id}
                       existing={

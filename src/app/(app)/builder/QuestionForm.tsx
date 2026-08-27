@@ -12,6 +12,7 @@ const FIELD_TYPES = [
   { value: "MULTI_SELECT", label: "Multi select" },
   { value: "DATE", label: "Date" },
   { value: "BOOLEAN", label: "Yes / No" },
+  { value: "INDICATOR", label: "Indicator (computed)" },
 ] as const;
 
 export function QuestionForm({ sectionId }: { sectionId: string }) {
@@ -76,10 +77,12 @@ export function QuestionForm({ sectionId }: { sectionId: string }) {
             </option>
           ))}
         </select>
-        <label className="ml-2 flex items-center gap-1.5 text-xs text-ink2">
-          <input name="isRequired" type="checkbox" defaultChecked className="accent-accent" />
-          Required
-        </label>
+        {inputType !== "INDICATOR" && (
+          <label className="ml-2 flex items-center gap-1.5 text-xs text-ink2">
+            <input name="isRequired" type="checkbox" defaultChecked className="accent-accent" />
+            Required
+          </label>
+        )}
       </div>
 
       {inputType === "NUMBER_WITH_UNIT" && (
@@ -119,6 +122,25 @@ export function QuestionForm({ sectionId }: { sectionId: string }) {
           placeholder="Option one, Option two, Option three"
           className="rounded-md border border-border bg-surface px-2 py-1.5 text-xs outline-none focus:border-accent"
         />
+      )}
+
+      {inputType === "INDICATOR" && (
+        <div className="rounded-md bg-track p-2">
+          <label className="mb-1 block text-[10px] uppercase text-muted">
+            Formula — reads other questions in this template by their code
+          </label>
+          <textarea
+            name="formula"
+            placeholder="e.g. total_emissions / SITE_ATTRIBUTE(&quot;revenue&quot;)"
+            rows={2}
+            required
+            className="w-full rounded-md border border-border bg-surface px-2 py-1.5 font-mono text-xs outline-none focus:border-accent"
+          />
+          <p className="mt-1 text-[11px] text-muted">
+            +-*/, comparisons, a ? b : c, and SUM/AVG/MIN/MAX/PRIOR_PERIOD/SITE_ATTRIBUTE. Checked for dimension
+            mismatches and circular references when you save.
+          </p>
+        </div>
       )}
 
       <div className="mt-1 flex items-center gap-2">

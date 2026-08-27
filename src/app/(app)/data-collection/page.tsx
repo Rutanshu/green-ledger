@@ -4,6 +4,7 @@ import { can } from "@/lib/auth/permissions";
 import { getOrgLabelOverrides } from "@/lib/labels/getOrgOverrides";
 import { Label } from "@/components/Label";
 import { AnswerRow } from "./AnswerRow";
+import { evaluateIndicators, EVAL_REASON_LABEL } from "./indicators";
 
 export const dynamic = "force-dynamic";
 
@@ -47,7 +48,9 @@ export default async function DataCollectionPage() {
           const allQuestions = assignment?.template.sections.flatMap((s) => s.questions) ?? [];
           const answersByQuestion = new Map(assignment?.answers.map((a) => [a.questionId, a]) ?? []);
           const numericQuestions = allQuestions.filter((q) => q.allowedUnits.length > 0);
-          const otherQuestions = allQuestions.filter((q) => q.allowedUnits.length === 0);
+          const indicatorQuestions = allQuestions.filter((q) => q.inputType === "INDICATOR");
+          const otherQuestions = allQuestions.filter((q) => q.allowedUnits.length === 0 && q.inputType !== "INDICATOR");
+          const indicatorResults = evaluateIndicators(allQuestions, answersByQuestion, site);
 
           return (
             <div key={site.id} className="rounded-[11px] glass">
@@ -95,6 +98,47 @@ export default async function DataCollectionPage() {
                       })}
                     </tbody>
                   </table>
+                  {indicatorQuestions.length > 0 && (
+                    <table className="w-full border-t border-grid text-[13px]">
+                      <thead>
+                        <tr className="text-left text-[11px] font-semibold uppercase tracking-wide text-muted">
+                          <th className="px-4 py-2">Indicator (computed)</th>
+                          <th className="px-4 py-2">Value</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {indicatorQuestions.map((q) => {
+                          const result = indicatorResults.get(q.code);
+                          return (
+                            <tr key={q.id} className="border-t border-grid/60">
+                              <td className="px-4 py-2 align-top">
+                                <div className="font-medium">{q.label}</div>
+                                <div className="mt-0.5 flex flex-wrap gap-1.5 text-xs text-muted">
+                                  <span className="font-mono">{q.code}</span>
+                                  {q.computedDimension && <span>· {q.computedDimension}</span>}
+                                </div>
+                                {q.formula && (
+                                  <div className="mt-1 rounded bg-track px-2 py-1 font-mono text-[11px] text-ink2">{q.formula}</div>
+                                )}
+                              </td>
+                              <td className="px-4 py-2 align-top">
+                                {!result ? (
+                                  <span className="text-xs text-muted">not evaluated</span>
+                                ) : result.reason ? (
+                                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                                    {EVAL_REASON_LABEL[result.reason] ?? result.reason}
+                                    {result.position ? ` (${result.position})` : ""}
+                                  </span>
+                                ) : (
+                                  <span className="font-mono">{result.value.toDecimalPlaces(6).toString()}</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  )}
                   {otherQuestions.length > 0 && (
                     <div className="border-t border-grid p-4 text-xs text-muted">
                       {otherQuestions.length} boolean/conditional question(s) not editable in this demo (
