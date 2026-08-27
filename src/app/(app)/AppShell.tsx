@@ -17,6 +17,7 @@ const NAV_PRIMARY = [
 
 const NAV_WORKFLOW = [
   { href: "/tasks", label: "Tasks", icon: "☑" },
+  { href: "/import", label: "Import", icon: "📥", requires: "submit_answers" as const },
   { href: "/documents", label: "Documents", icon: "🗎" },
   { href: "/reports", label: "Reports", icon: "▧" },
 ];
@@ -29,7 +30,14 @@ const NAV_ADMIN = [
   { href: "/users", label: "Users & roles", icon: "☖", requires: "manage_users" as const },
 ];
 
-function NavGroup({ items, pathname, role }: { items: typeof NAV_ADMIN; pathname: string; role: Role }) {
+interface NavItem {
+  href: string;
+  label: string;
+  icon: string;
+  requires?: Parameters<typeof can>[1];
+}
+
+function NavGroup({ items, pathname, role }: { items: readonly NavItem[]; pathname: string; role: Role }) {
   return (
     <div className="flex flex-col gap-px">
       {items

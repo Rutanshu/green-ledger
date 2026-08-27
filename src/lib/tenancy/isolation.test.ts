@@ -132,6 +132,10 @@ beforeAll(async () => {
       reason: 'Isolation test restatement', diff: {}, requestedById: userA.id,
     },
   });
+
+  fixtures.MappingProfile = await adminPrisma.mappingProfile.create({
+    data: { organizationId: orgA.id, name: 'Isolation test profile', columnMapping: { site_code: 'site_code' } },
+  });
 }, 30000);
 
 afterAll(async () => {
@@ -145,7 +149,7 @@ const STRICT_ORG_MODELS = [
   'Membership', 'LabelOverride', 'Site', 'SiteAsset', 'ReportingPeriod',
   'QuestionnaireTemplate', 'Document', 'Task', 'AuditEvent', 'Target',
   'Report', 'ImportBatch', 'ActivityRecord', 'Position', 'Entitlement', 'ImpactProfile',
-  'Rule', 'RuleViolation', 'Restatement',
+  'Rule', 'RuleViolation', 'Restatement', 'MappingProfile',
 ] as const;
 
 // audit_events has UPDATE/DELETE revoked at the database grant level (see

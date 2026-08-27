@@ -371,6 +371,12 @@ enum RestatementStatus {
   REJECTED
 }
 
+enum ImportRowStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
 // ─────────────────────────────── identity ───────────────────────────────
 
 model User {
@@ -403,26 +409,27 @@ model Organization {
   createdAt             DateTime              @default(now()) @map("created_at")
   updatedAt             DateTime              @updatedAt @map("updated_at")
 
-  memberships    Membership[]
-  sites          Site[]
-  periods        ReportingPeriod[]
-  factorSets     EmissionFactorSet[]
-  templates      QuestionnaireTemplate[]
-  documents      Document[]
-  tasks          Task[]
-  auditEvents    AuditEvent[]
-  targets        Target[]
-  reports        Report[]
-  labelOverrides LabelOverride[]
-  vocabulary     VocabularyEntry[]
-  fuelProperties FuelProperty[]
-  importBatches  ImportBatch[]
-  positions      Position[]
-  entitlements   Entitlement[]
-  impactProfiles ImpactProfile[]
-  rules          Rule[]
-  ruleViolations RuleViolation[]
-  restatements   Restatement[]
+  memberships     Membership[]
+  sites           Site[]
+  periods         ReportingPeriod[]
+  factorSets      EmissionFactorSet[]
+  templates       QuestionnaireTemplate[]
+  documents       Document[]
+  tasks           Task[]
+  auditEvents     AuditEvent[]
+  targets         Target[]
+  reports         Report[]
+  labelOverrides  LabelOverride[]
+  vocabulary      VocabularyEntry[]
+  fuelProperties  FuelProperty[]
+  importBatches   ImportBatch[]
+  positions       Position[]
+  entitlements    Entitlement[]
+  impactProfiles  ImpactProfile[]
+  rules           Rule[]
+  ruleViolations  RuleViolation[]
+  restatements    Restatement[]
+  mappingProfiles MappingProfile[]
 
   @@index([isSandbox, sandboxExpiresAt])
   @@map("organizations")
@@ -1184,24 +1191,78 @@ model RuleViolation {
   @@map("rule_violations")
 }
 
+/// GHG_TOOL_ARCHITECTURE.md §12/§4.7, BUILD_PLAN Step 3.5. Long-format
+/// import — one row per Answer (site_code, question_code, value, unit,
+/// data_quality) — rather than a wide spreadsheet with one column per
+/// question. A MappingProfile still lets an arbitrary CSV's own header
+/// names map onto those five canonical fields, so a real customer export
+/// doesn't need to be reformatted by hand first.
 model ImportBatch {
-  id             String       @id @default(uuid())
-  organizationId String       @map("organization_id")
-  filename       String
-  sha256         String
-  rowCount       Int          @default(0) @map("row_count")
-  rowsAccepted   Int          @default(0) @map("rows_accepted")
-  rowsRejected   Int          @default(0) @map("rows_rejected")
-  status         ImportStatus @default(PENDING)
-  errorReportKey String?      @map("error_report_key")
-  uploadedById   String?      @map("uploaded_by_id")
-  createdAt      DateTime     @default(now()) @map("created_at")
+  id                String       @id @default(uuid())
+  organizationId    String       @map("organization_id")
+  filename          String
+  sha256            String
+  rowCount          Int          @default(0) @map("row_count")
+  rowsAccepted      Int          @default(0) @map("rows_accepted")
+  rowsRejected      Int          @default(0) @map("rows_rejected")
+  status            ImportStatus @default(PENDING)
+  errorReportKey    String?      @map("error_report_key")
+  uploadedById      String?      @map("uploaded_by_id")
+  reportingPeriodId String?      @map("reporting_period_id")
+  createdAt         DateTime     @default(now()) @map("created_at")
 
   organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   activityRecords ActivityRecord[]
+  rows            ImportRow[]
 
   @@index([organizationId, status])
   @@map("import_batches")
+}
+
+/// One staged Answer. Nothing here touches a live Answer until commitImport
+/// runs — a rejected row is just a row here, never partially applied.
+/// before* fields are captured at COMMIT time (what the Answer held right
+/// before this row overwrote it), so revertImport can restore it exactly —
+/// not merely delete it, which would be wrong for a row that updated an
+/// existing answer rather than creating a new one.
+model ImportRow {
+  id                String          @id @default(uuid())
+  importBatchId     String          @map("import_batch_id")
+  rowNumber         Int             @map("row_number")
+  rawData           Json            @map("raw_data")
+  siteCode          String?         @map("site_code")
+  questionCode      String?         @map("question_code")
+  value             String?
+  unit              String?
+  dataQuality       String?         @map("data_quality")
+  status            ImportRowStatus @default(PENDING)
+  errorMessage      String?         @map("error_message")
+  beforeValue       Decimal?        @map("before_value") @db.Decimal(20, 6)
+  beforeUnit        UnitCode?       @map("before_unit")
+  beforeDataQuality DataQuality?    @map("before_data_quality")
+  answerId          String?         @map("answer_id")
+
+  importBatch ImportBatch @relation(fields: [importBatchId], references: [id], onDelete: Cascade)
+
+  @@index([importBatchId, status])
+  @@map("import_rows")
+}
+
+/// A saved column -> canonical-field mapping (site_code, question_code,
+/// value, unit, data_quality), reusable across imports from the same
+/// source spreadsheet shape.
+model MappingProfile {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  name           String
+  /// { "Site code": "site_code", "Diesel (litres)": "value", ... }
+  columnMapping  Json     @map("column_mapping")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, name])
+  @@map("mapping_profiles")
 }
 
 // ─────────────────────────────── positions ───────────────────────────────
