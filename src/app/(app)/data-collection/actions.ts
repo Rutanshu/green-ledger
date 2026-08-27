@@ -10,6 +10,7 @@ import { calculateEmissions, calculateDualBasis, sumKg, toTonnes, type CalcInput
 import { buildFactorCandidates } from "@/lib/db/factor-candidates";
 import { projectAnswer } from "@/lib/project";
 import { recordAudit } from "@/lib/audit";
+import { assertPeriodWritable, PeriodLockedError } from "@/lib/periods";
 import { can, ROLE_LABEL } from "@/lib/auth/permissions";
 import type { UnitCode } from "@/lib/units";
 import type { FuelPropertyRecord } from "@/lib/units/fuelProperty";
@@ -72,8 +73,11 @@ export async function submitAnswer(_prev: SubmitAnswerState, formData: FormData)
   if (!assignment) return { ok: false, error: "Assignment not found." };
 
   const period = assignment.period;
-  if (period.status === "LOCKED" || period.status === "ASSURED") {
-    return { ok: false, error: `Period ${period.label} is ${period.status.toLowerCase()} — edits are refused.` };
+  try {
+    assertPeriodWritable(period);
+  } catch (e) {
+    if (e instanceof PeriodLockedError) return { ok: false, error: e.message };
+    throw e;
   }
 
   // Reference data for calculation — read-only, fetched before the
