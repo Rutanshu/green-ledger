@@ -1,18 +1,18 @@
 "use client";
 
 import { useActionState, useEffect, useRef, useState } from "react";
-import { assignPosition } from "./actions";
+import { assignResponsibility } from "./actions";
 
 export function AssignForm({
-  positionId,
+  responsibilityId,
   isBackup,
   members,
 }: {
-  positionId: string;
+  responsibilityId: string;
   isBackup: boolean;
   members: Array<{ id: string; label: string }>;
 }) {
-  const [state, formAction, pending] = useActionState(assignPosition, null);
+  const [state, formAction, pending] = useActionState(assignResponsibility, null);
   const [open, setOpen] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -33,7 +33,7 @@ export function AssignForm({
 
   return (
     <form ref={formRef} action={formAction} className="mt-1.5 flex flex-col gap-1.5">
-      <input type="hidden" name="positionId" value={positionId} />
+      <input type="hidden" name="responsibilityId" value={responsibilityId} />
       {isBackup && <input type="hidden" name="isBackup" value="on" />}
       <select name="userId" required defaultValue="" className="rounded border border-border bg-surface px-1.5 py-1 text-[11px]">
         <option value="" disabled>Choose a person…</option>

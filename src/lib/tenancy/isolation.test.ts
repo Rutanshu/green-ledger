@@ -105,8 +105,8 @@ beforeAll(async () => {
     },
   });
 
-  fixtures.Position = await adminPrisma.position.create({
-    data: { organizationId: orgA.id, title: 'Isolation test position', type: 'OTHER' },
+  fixtures.Responsibility = await adminPrisma.responsibility.create({
+    data: { organizationId: orgA.id, title: 'Isolation test responsibility', type: 'OTHER' },
   });
 
   fixtures.Entitlement = await adminPrisma.entitlement.create({
@@ -148,7 +148,7 @@ afterAll(async () => {
 const STRICT_ORG_MODELS = [
   'Membership', 'LabelOverride', 'Site', 'SiteAsset', 'ReportingPeriod',
   'QuestionnaireTemplate', 'Document', 'Task', 'AuditEvent', 'Target',
-  'Report', 'ImportBatch', 'ActivityRecord', 'Position', 'Entitlement', 'ImpactProfile',
+  'Report', 'ImportBatch', 'ActivityRecord', 'Responsibility', 'Entitlement', 'ImpactProfile',
   'Rule', 'RuleViolation', 'Restatement', 'MappingProfile',
 ] as const;
 

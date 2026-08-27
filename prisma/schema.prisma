@@ -137,10 +137,11 @@ enum Role {
   READ_ONLY
 }
 
-/// What a position is accountable FOR — distinct from Role (what a person can
-/// technically do in the app). A position is stable business responsibility;
-/// Role is technical permission. The same person often holds both.
-enum PositionType {
+/// What a responsibility is accountable FOR — distinct from Role (what a
+/// person can technically do in the app). A responsibility is a stable
+/// business role; Role is technical permission. The same person often
+/// holds both.
+enum ResponsibilityType {
   DATA_OWNER
   REVIEWER
   APPROVER
@@ -380,17 +381,17 @@ enum ImportRowStatus {
 // ─────────────────────────────── identity ───────────────────────────────
 
 model User {
-  id                  String               @id @default(uuid())
-  email               String               @unique
-  name                String?
-  image               String?
+  id                        String                     @id @default(uuid())
+  email                     String                     @unique
+  name                      String?
+  image                     String?
   /// scrypt hash, see lib/auth/password.ts. Null for a user who has never
   /// set a password (e.g. would-be OAuth-only users, once OAuth exists).
-  passwordHash        String?              @map("password_hash")
-  emailVerified       DateTime?
-  createdAt           DateTime             @default(now())
-  memberships         Membership[]
-  positionAssignments PositionAssignment[]
+  passwordHash              String?                    @map("password_hash")
+  emailVerified             DateTime?
+  createdAt                 DateTime                   @default(now())
+  memberships               Membership[]
+  responsibilityAssignments ResponsibilityAssignment[]
 
   @@map("users")
 }
@@ -409,27 +410,27 @@ model Organization {
   createdAt             DateTime              @default(now()) @map("created_at")
   updatedAt             DateTime              @updatedAt @map("updated_at")
 
-  memberships     Membership[]
-  sites           Site[]
-  periods         ReportingPeriod[]
-  factorSets      EmissionFactorSet[]
-  templates       QuestionnaireTemplate[]
-  documents       Document[]
-  tasks           Task[]
-  auditEvents     AuditEvent[]
-  targets         Target[]
-  reports         Report[]
-  labelOverrides  LabelOverride[]
-  vocabulary      VocabularyEntry[]
-  fuelProperties  FuelProperty[]
-  importBatches   ImportBatch[]
-  positions       Position[]
-  entitlements    Entitlement[]
-  impactProfiles  ImpactProfile[]
-  rules           Rule[]
-  ruleViolations  RuleViolation[]
-  restatements    Restatement[]
-  mappingProfiles MappingProfile[]
+  memberships      Membership[]
+  sites            Site[]
+  periods          ReportingPeriod[]
+  factorSets       EmissionFactorSet[]
+  templates        QuestionnaireTemplate[]
+  documents        Document[]
+  tasks            Task[]
+  auditEvents      AuditEvent[]
+  targets          Target[]
+  reports          Report[]
+  labelOverrides   LabelOverride[]
+  vocabulary       VocabularyEntry[]
+  fuelProperties   FuelProperty[]
+  importBatches    ImportBatch[]
+  responsibilities Responsibility[]
+  entitlements     Entitlement[]
+  impactProfiles   ImpactProfile[]
+  rules            Rule[]
+  ruleViolations   RuleViolation[]
+  restatements     Restatement[]
+  mappingProfiles  MappingProfile[]
 
   @@index([isSandbox, sandboxExpiresAt])
   @@map("organizations")
@@ -537,7 +538,7 @@ model Site {
   ownershipPeriods SiteOwnershipPeriod[]
   activityRecords  ActivityRecord[]
   assignments      QuestionnaireAssignment[]
-  positions        Position[]
+  responsibilities Responsibility[]
 
   @@unique([organizationId, code])
   @@index([organizationId, siteType])
@@ -1265,50 +1266,53 @@ model MappingProfile {
   @@map("mapping_profiles")
 }
 
-// ─────────────────────────────── positions ───────────────────────────────
-// SPEC.md / GHG Intelligence Platform blueprint P53. A position is a stable
-// responsibility ("Site Data Owner, Ashford Data Centre") independent of
-// whoever currently holds it. Work assigns to the position; the position's
-// current PositionAssignment resolves who actually gets notified. Losing an
-// incumbent doesn't lose the responsibility — it just needs reassigning.
-
-model Position {
-  id             String       @id @default(uuid())
-  organizationId String       @map("organization_id")
+// ─────────────────────────────── responsibilities ───────────────────────────────
+// SPEC.md / GHG Intelligence Platform blueprint P53. A responsibility is a
+// stable role ("Site Data Owner, Ashford Data Centre") independent of
+// whoever currently holds it. Work assigns to the responsibility; its
+// current ResponsibilityAssignment resolves who actually gets notified.
+// Losing an incumbent doesn't lose the responsibility — it just needs
+// reassigning. Renamed from "Position" — that name now belongs to
+// GHG_TOOL_ARCHITECTURE.md's atomic data field (see the positions section
+// further down this file); this P53 concept is a different thing entirely
+// and the collision was never resolvable by keeping both called Position.
+model Responsibility {
+  id             String             @id @default(uuid())
+  organizationId String             @map("organization_id")
   title          String
-  type           PositionType
-  /// null = an organisation-wide position, not tied to one site
-  siteId         String?      @map("site_id")
+  type           ResponsibilityType
+  /// null = an organisation-wide responsibility, not tied to one site
+  siteId         String?            @map("site_id")
   description    String?
-  createdAt      DateTime     @default(now()) @map("created_at")
+  createdAt      DateTime           @default(now()) @map("created_at")
 
-  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  site         Site?                @relation(fields: [siteId], references: [id], onDelete: Cascade)
-  assignments  PositionAssignment[]
+  organization Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  site         Site?                      @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  assignments  ResponsibilityAssignment[]
 
   @@index([organizationId, siteId])
-  @@map("positions")
+  @@map("responsibilities")
 }
 
 /// One incumbency. endedOn null = current holder. Never delete a row —
 /// end it and create a new one, so historical work always resolves to
-/// whoever actually held the position when it happened.
-model PositionAssignment {
-  id          String    @id @default(uuid())
-  positionId  String    @map("position_id")
-  userId      String    @map("user_id")
-  isBackup    Boolean   @default(false) @map("is_backup")
-  startedOn   DateTime  @default(now()) @map("started_on")
-  endedOn     DateTime? @map("ended_on")
-  reason      String?
-  createdById String?   @map("created_by_id")
-  createdAt   DateTime  @default(now()) @map("created_at")
+/// whoever actually held the responsibility when it happened.
+model ResponsibilityAssignment {
+  id               String    @id @default(uuid())
+  responsibilityId String    @map("responsibility_id")
+  userId           String    @map("user_id")
+  isBackup         Boolean   @default(false) @map("is_backup")
+  startedOn        DateTime  @default(now()) @map("started_on")
+  endedOn          DateTime? @map("ended_on")
+  reason           String?
+  createdById      String?   @map("created_by_id")
+  createdAt        DateTime  @default(now()) @map("created_at")
 
-  position Position @relation(fields: [positionId], references: [id], onDelete: Cascade)
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  responsibility Responsibility @relation(fields: [responsibilityId], references: [id], onDelete: Cascade)
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([positionId, endedOn])
-  @@map("position_assignments")
+  @@index([responsibilityId, endedOn])
+  @@map("responsibility_assignments")
 }
 
 // ─────────────────────────────── entitlements ───────────────────────────────

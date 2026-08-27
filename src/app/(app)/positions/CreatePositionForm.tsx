@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useRef } from "react";
-import { createPosition } from "./actions";
+import { createResponsibility } from "./actions";
 
 const TYPES = [
   { value: "DATA_OWNER", label: "Data owner" },
@@ -13,7 +13,7 @@ const TYPES = [
 ];
 
 export function CreatePositionForm({ sites }: { sites: Array<{ id: string; name: string; code: string }> }) {
-  const [state, formAction, pending] = useActionState(createPosition, null);
+  const [state, formAction, pending] = useActionState(createResponsibility, null);
   const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
@@ -24,7 +24,7 @@ export function CreatePositionForm({ sites }: { sites: Array<{ id: string; name:
     <form ref={formRef} action={formAction} className="glass flex flex-wrap items-center gap-2 rounded-[11px] p-3">
       <input
         name="title"
-        placeholder="Position title, e.g. “Site Data Owner”"
+        placeholder="Responsibility title, e.g. “Site Data Owner”"
         required
         className="min-w-0 flex-1 rounded-md border border-border bg-plane px-3 py-1.5 text-sm outline-none focus:border-accent"
       />
@@ -44,7 +44,7 @@ export function CreatePositionForm({ sites }: { sites: Array<{ id: string; name:
         disabled={pending}
         className="whitespace-nowrap rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60"
       >
-        {pending ? "Creating…" : "+ Create position"}
+        {pending ? "Creating…" : "+ Create responsibility"}
       </button>
       {state?.error && <span className="text-xs text-crit">{state.error}</span>}
     </form>

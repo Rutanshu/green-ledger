@@ -4,7 +4,7 @@ import { can } from "@/lib/auth/permissions";
 import { Denied } from "../_components/Denied";
 import { CreatePositionForm } from "./CreatePositionForm";
 import { AssignForm } from "./AssignForm";
-import { endAssignment, deletePosition } from "./actions";
+import { endAssignment, deleteResponsibility } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -25,8 +25,8 @@ export default async function PositionsPage() {
   const orgId = membership.org.id;
   const db = orgScopedClient(orgId);
 
-  const [positions, sites, members] = await Promise.all([
-    db.position.findMany({
+  const [responsibilities, sites, members] = await Promise.all([
+    db.responsibility.findMany({
       include: {
         site: { select: { name: true, code: true } },
         assignments: {
@@ -41,19 +41,19 @@ export default async function PositionsPage() {
   ]);
 
   const memberOptions = members.map((m) => ({ id: m.user.id, label: m.user.name ?? m.user.email }));
-  const vacant = positions.filter((p) => !p.assignments.some((a) => !a.isBackup));
+  const vacant = responsibilities.filter((p) => !p.assignments.some((a) => !a.isBackup));
 
   return (
     <>
-      <h1 className="text-xl font-semibold">Positions</h1>
+      <h1 className="text-xl font-semibold">Responsibilities</h1>
       <p className="mt-0.5 text-[13px] text-ink2">
         A stable responsibility — &ldquo;Site Data Owner, Ashford&rdquo; — independent of whoever holds it right
-        now. Reassign the position when someone leaves; the responsibility itself never disappears.
+        now. Reassign it when someone leaves; the responsibility itself never disappears.
       </p>
 
       {vacant.length > 0 && (
         <div className="mt-4 rounded-[11px] border border-warn/40 bg-warn/10 p-3 text-[13px] text-ink">
-          <span className="font-medium">{vacant.length} vacant position{vacant.length === 1 ? "" : "s"}</span> —{" "}
+          <span className="font-medium">{vacant.length} vacant responsibilit{vacant.length === 1 ? "y" : "ies"}</span> —{" "}
           {vacant.map((p) => p.title).join(", ")}
         </div>
       )}
@@ -65,7 +65,7 @@ export default async function PositionsPage() {
       )}
 
       <div className="mt-5 flex flex-col gap-3">
-        {positions.map((p) => {
+        {responsibilities.map((p) => {
           const primary = p.assignments.find((a) => !a.isBackup);
           const backup = p.assignments.find((a) => a.isBackup);
           return (
@@ -82,7 +82,7 @@ export default async function PositionsPage() {
                   {p.description && <div className="mt-0.5 text-xs text-ink2">{p.description}</div>}
                 </div>
                 {canEdit && (
-                  <form action={deletePosition.bind(null, p.id)}>
+                  <form action={deleteResponsibility.bind(null, p.id)}>
                     <button type="submit" className="text-xs text-muted hover:text-crit">
                       Delete
                     </button>
@@ -107,7 +107,7 @@ export default async function PositionsPage() {
                   ) : (
                     <div className="mt-1 text-[13px] text-warn">Vacant</div>
                   )}
-                  {canEdit && <AssignForm positionId={p.id} isBackup={false} members={memberOptions} />}
+                  {canEdit && <AssignForm responsibilityId={p.id} isBackup={false} members={memberOptions} />}
                 </div>
 
                 <div className="rounded-md bg-track p-2.5">
@@ -126,13 +126,13 @@ export default async function PositionsPage() {
                   ) : (
                     <div className="mt-1 text-[13px] text-muted">None</div>
                   )}
-                  {canEdit && <AssignForm positionId={p.id} isBackup={true} members={memberOptions} />}
+                  {canEdit && <AssignForm responsibilityId={p.id} isBackup={true} members={memberOptions} />}
                 </div>
               </div>
             </div>
           );
         })}
-        {positions.length === 0 && <p className="text-[13px] text-muted">No positions yet.</p>}
+        {responsibilities.length === 0 && <p className="text-[13px] text-muted">No responsibilities yet.</p>}
       </div>
     </>
   );
