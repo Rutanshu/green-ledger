@@ -339,6 +339,12 @@ enum ImportStatus {
   REVERTED
 }
 
+enum ImpactProfileStatus {
+  DRAFT
+  ACTIVE
+  SUPERSEDED
+}
+
 // ─────────────────────────────── identity ───────────────────────────────
 
 model User {
@@ -387,6 +393,7 @@ model Organization {
   importBatches  ImportBatch[]
   positions      Position[]
   entitlements   Entitlement[]
+  impactProfiles ImpactProfile[]
 
   @@index([isSandbox, sandboxExpiresAt])
   @@map("organizations")
@@ -769,6 +776,53 @@ model FactorBinding {
 
   @@index([health])
   @@map("factor_bindings")
+}
+
+/// A named, versioned, immutable snapshot of every question's FactorBinding
+/// config at one moment — GHG_TOOL_ARCHITECTURE.md §4.5/§20, BUILD_PLAN Step
+/// 2.3. FactorBinding itself stays the live, editable binding a question
+/// actually calculates against; ImpactProfile is the audit trail answering
+/// "what were our bindings the day we published this questionnaire version."
+/// Exactly one profile per org is ACTIVE at a time — activating a new one
+/// supersedes the previous ACTIVE profile, never edits it.
+model ImpactProfile {
+  id             String              @id @default(uuid())
+  organizationId String              @map("organization_id")
+  name           String
+  version        Int
+  status         ImpactProfileStatus @default(DRAFT)
+  createdAt      DateTime            @default(now()) @map("created_at")
+  activatedAt    DateTime?           @map("activated_at")
+  supersededAt   DateTime?           @map("superseded_at")
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assignments  FactorAssignment[]
+
+  @@unique([organizationId, name, version])
+  @@index([organizationId, status])
+  @@map("impact_profiles")
+}
+
+/// One question's binding as it stood inside a specific ImpactProfile
+/// snapshot. Referenced by question CODE, not questionId — a profile is a
+/// portable record that must still mean something if the question is later
+/// deleted and recreated with the same code.
+model FactorAssignment {
+  id                 String         @id @default(uuid())
+  impactProfileId    String         @map("impact_profile_id")
+  questionCode       String         @map("question_code")
+  scope              Scope
+  scope3Category     Int?           @map("scope3_category")
+  activityType       ActivityType   @map("activity_type")
+  method             CalcMethod
+  fuelOrMaterialCode String         @map("fuel_or_material_code")
+  regionStrategy     RegionStrategy @default(SITE_COUNTRY_THEN_GRID_THEN_GLOBAL) @map("region_strategy")
+  outputBasis        OutputBasis    @default(SINGLE) @map("output_basis")
+
+  impactProfile ImpactProfile @relation(fields: [impactProfileId], references: [id], onDelete: Cascade)
+
+  @@unique([impactProfileId, questionCode])
+  @@map("factor_assignments")
 }
 
 model QuestionnaireAssignment {

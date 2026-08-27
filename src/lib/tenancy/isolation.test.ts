@@ -112,6 +112,10 @@ beforeAll(async () => {
   fixtures.Entitlement = await adminPrisma.entitlement.create({
     data: { organizationId: orgA.id, featureCode: 'isolation_test_feature' },
   });
+
+  fixtures.ImpactProfile = await adminPrisma.impactProfile.create({
+    data: { organizationId: orgA.id, name: 'Isolation test profile', version: 1 },
+  });
 }, 30000);
 
 afterAll(async () => {
@@ -124,7 +128,7 @@ afterAll(async () => {
 const STRICT_ORG_MODELS = [
   'Membership', 'LabelOverride', 'Site', 'SiteAsset', 'ReportingPeriod',
   'QuestionnaireTemplate', 'Document', 'Task', 'AuditEvent', 'Target',
-  'Report', 'ImportBatch', 'ActivityRecord', 'Position', 'Entitlement',
+  'Report', 'ImportBatch', 'ActivityRecord', 'Position', 'Entitlement', 'ImpactProfile',
 ] as const;
 
 // audit_events has UPDATE/DELETE revoked at the database grant level (see

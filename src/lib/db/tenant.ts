@@ -16,7 +16,7 @@ import { runWithOrg } from '../tenancy/context';
 const STRICT_ORG_MODELS = new Set([
   'Membership', 'LabelOverride', 'Site', 'SiteAsset', 'ReportingPeriod',
   'QuestionnaireTemplate', 'Document', 'Task', 'AuditEvent', 'Target',
-  'Report', 'ImportBatch', 'ActivityRecord', 'Position', 'Entitlement',
+  'Report', 'ImportBatch', 'ActivityRecord', 'Position', 'Entitlement', 'ImpactProfile',
 ]);
 
 /**

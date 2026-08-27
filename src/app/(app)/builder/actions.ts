@@ -8,6 +8,7 @@ import { orgScopedClient, withOrgTransaction } from "@/lib/db/tenant";
 import { can } from "@/lib/auth/permissions";
 import { recordAudit } from "@/lib/audit";
 import { checkBindingHealth } from "@/lib/factors";
+import { activateProfile, supersedeProfile } from "@/lib/factors/impactProfile";
 import { buildFactorCandidates } from "@/lib/db/factor-candidates";
 import type { UnitDimension } from "@/lib/units";
 import {
@@ -82,9 +83,11 @@ export async function publishTemplate(templateId: string): Promise<ActionState> 
   ]);
   const candidates = buildFactorCandidates(factorSets);
 
-  const bindings = template.sections.flatMap((s) => s.questions).map((q) => q.binding).filter((b) => b !== null);
+  const boundQuestions = template.sections
+    .flatMap((s) => s.questions)
+    .filter((q): q is typeof q & { binding: NonNullable<typeof q.binding> } => q.binding !== null);
   const broken: string[] = [];
-  for (const b of bindings) {
+  for (const { binding: b } of boundQuestions) {
     if (!site) break;
     const bases: Array<"LOCATION_BASED" | "MARKET_BASED" | undefined> =
       b.outputBasis === "DUAL" ? ["LOCATION_BASED", "MARKET_BASED"] : [undefined];
@@ -119,6 +122,52 @@ export async function publishTemplate(templateId: string): Promise<ActionState> 
       entityType: "QuestionnaireTemplate",
       entityId: templateId,
       after: updated,
+    });
+
+    // CLAUDE.md rule 3 / GHG_TOOL_ARCHITECTURE.md §20: publishing snapshots
+    // every live binding into a new, immutable ImpactProfile version — the
+    // audit trail answering "what did our factor bindings look like the day
+    // we published this questionnaire" independent of FactorBinding's own,
+    // separately editable, live state.
+    const prevActive = await tx.impactProfile.findFirst({ where: { organizationId: orgId, status: "ACTIVE" } });
+    if (prevActive) {
+      await tx.impactProfile.update({
+        where: { id: prevActive.id },
+        data: { status: supersedeProfile(prevActive.status as "ACTIVE"), supersededAt: new Date() },
+      });
+    }
+    const lastVersion = await tx.impactProfile.findFirst({
+      where: { organizationId: orgId, name: template.name },
+      orderBy: { version: "desc" },
+    });
+    const profile = await tx.impactProfile.create({
+      data: {
+        organizationId: orgId,
+        name: template.name,
+        version: (lastVersion?.version ?? 0) + 1,
+        status: activateProfile("DRAFT"),
+        activatedAt: new Date(),
+        assignments: {
+          create: boundQuestions.map(({ code, binding: b }) => ({
+            questionCode: code,
+            scope: b.scope,
+            scope3Category: b.scope3Category,
+            activityType: b.activityType,
+            method: b.method,
+            fuelOrMaterialCode: b.fuelOrMaterialCode,
+            regionStrategy: b.regionStrategy,
+            outputBasis: b.outputBasis,
+          })),
+        },
+      },
+    });
+    await recordAudit(tx, {
+      organizationId: orgId,
+      actorUserId: auth.membership.user.id,
+      action: "CREATE",
+      entityType: "ImpactProfile",
+      entityId: profile.id,
+      after: profile,
     });
   });
 
