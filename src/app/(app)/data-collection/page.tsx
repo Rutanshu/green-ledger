@@ -5,6 +5,7 @@ import { getOrgLabelOverrides } from "@/lib/labels/getOrgOverrides";
 import { Label } from "@/components/Label";
 import { AnswerRow } from "./AnswerRow";
 import { evaluateIndicators, EVAL_REASON_LABEL } from "./indicators";
+import { RestatementForm } from "./RestatementForm";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,7 @@ export default async function DataCollectionPage() {
         include: {
           answers: { include: { question: true, activityRecords: { include: { emissionRecords: true } } } },
           template: { include: { sections: { include: { questions: true } } } },
+          period: true,
         },
       },
     },
@@ -143,6 +145,18 @@ export default async function DataCollectionPage() {
                     <div className="border-t border-grid p-4 text-xs text-muted">
                       {otherQuestions.length} boolean/conditional question(s) not editable in this demo (
                       {otherQuestions.map((q) => q.code).join(", ")}).
+                    </div>
+                  )}
+                  {canEdit && (assignment!.period.status === "LOCKED" || assignment!.period.status === "ASSURED") && (
+                    <div className="border-t border-grid p-4">
+                      <p className="text-xs text-ink2">
+                        {assignment!.period.label} is {assignment!.period.status.toLowerCase()} — direct edits are refused. Request a
+                        restatement instead; it applies only once a different person approves it.
+                      </p>
+                      <RestatementForm
+                        assignmentId={assignment!.id}
+                        questions={numericQuestions.map((q) => ({ id: q.id, code: q.code, allowedUnits: q.allowedUnits }))}
+                      />
                     </div>
                   )}
                 </>

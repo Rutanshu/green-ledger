@@ -125,6 +125,13 @@ beforeAll(async () => {
   fixtures.RuleViolation = await adminPrisma.ruleViolation.create({
     data: { organizationId: orgA.id, ruleId: rule.id, ruleVersion: 1, message: 'Isolation test violation' },
   });
+
+  fixtures.Restatement = await adminPrisma.restatement.create({
+    data: {
+      organizationId: orgA.id, reportingPeriodId: periodA.id, entityType: 'Answer', entityId: 'test-id',
+      reason: 'Isolation test restatement', diff: {}, requestedById: userA.id,
+    },
+  });
 }, 30000);
 
 afterAll(async () => {
@@ -138,7 +145,7 @@ const STRICT_ORG_MODELS = [
   'Membership', 'LabelOverride', 'Site', 'SiteAsset', 'ReportingPeriod',
   'QuestionnaireTemplate', 'Document', 'Task', 'AuditEvent', 'Target',
   'Report', 'ImportBatch', 'ActivityRecord', 'Position', 'Entitlement', 'ImpactProfile',
-  'Rule', 'RuleViolation',
+  'Rule', 'RuleViolation', 'Restatement',
 ] as const;
 
 // audit_events has UPDATE/DELETE revoked at the database grant level (see

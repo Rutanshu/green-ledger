@@ -365,6 +365,12 @@ enum RuleViolationStatus {
   ACKNOWLEDGED
 }
 
+enum RestatementStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 // ─────────────────────────────── identity ───────────────────────────────
 
 model User {
@@ -416,6 +422,7 @@ model Organization {
   impactProfiles ImpactProfile[]
   rules          Rule[]
   ruleViolations RuleViolation[]
+  restatements   Restatement[]
 
   @@index([isSandbox, sandboxExpiresAt])
   @@map("organizations")
@@ -595,6 +602,7 @@ model ReportingPeriod {
   activityRecords  ActivityRecord[]
   assignments      QuestionnaireAssignment[]
   reports          Report[]
+  restatements     Restatement[]
 
   @@unique([organizationId, label])
   @@map("reporting_periods")
@@ -1022,7 +1030,12 @@ model Task {
   @@map("tasks")
 }
 
-/// Append-only. The app DB role has UPDATE and DELETE revoked on this table.
+/// Append-only from the app's perspective — nothing in this codebase ever
+/// updates or deletes a row. NOT yet enforced at the database grant level:
+/// Neon's free tier has the app connect as the table-owning role, and
+/// REVOKE has no effect on an owner, so a real app_user role with
+/// UPDATE/DELETE revoked needs provisioning first (see the org_scoping_rls
+/// migration's own note — tracked as follow-up, not silently skipped).
 model AuditEvent {
   id             String      @id @default(uuid())
   organizationId String      @map("organization_id")
@@ -1041,6 +1054,35 @@ model AuditEvent {
   @@index([organizationId, occurredAt])
   @@index([entityType, entityId])
   @@map("audit_events")
+}
+
+/// CLAUDE.md rule 8: "Locked periods are immutable. Corrections go through
+/// restatement." Until this model existed, a locked period simply refused
+/// every write (assertPeriodWritable) with no path forward at all — this
+/// is that path. requestedBy and approver must differ (four-eyes,
+/// lib/audit/restatement.ts); approving one is the only thing in this
+/// codebase allowed to write into a locked period, and it does so as an
+/// explicit, audited RESTATE action, never a silent bypass.
+model Restatement {
+  id                String            @id @default(uuid())
+  organizationId    String            @map("organization_id")
+  reportingPeriodId String            @map("reporting_period_id")
+  entityType        String            @map("entity_type")
+  entityId          String            @map("entity_id")
+  reason            String
+  diff              Json
+  status            RestatementStatus @default(PENDING)
+  requestedById     String            @map("requested_by_id")
+  approverId        String?           @map("approver_id")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  decidedAt         DateTime?         @map("decided_at")
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  period       ReportingPeriod @relation(fields: [reportingPeriodId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status])
+  @@index([reportingPeriodId])
+  @@map("restatements")
 }
 
 model Target {
