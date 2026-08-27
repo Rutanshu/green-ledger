@@ -3,7 +3,7 @@ import { activateProfile, diffProfiles, IllegalProfileTransitionError, supersede
 
 function assignment(overrides: Partial<FactorAssignmentLike> = {}): FactorAssignmentLike {
   return {
-    questionCode: "diesel_qty",
+    positionCode: "diesel_qty",
     scope: "SCOPE_1",
     scope3Category: null,
     activityType: "STATIONARY_COMBUSTION",
@@ -60,6 +60,6 @@ describe("diffProfiles", () => {
     const diff = diffProfiles([before], [after]);
     expect(diff.added).toHaveLength(0);
     expect(diff.removed).toHaveLength(0);
-    expect(diff.changed).toEqual([{ questionCode: "diesel_qty", before, after }]);
+    expect(diff.changed).toEqual([{ positionCode: "diesel_qty", before, after }]);
   });
 });

@@ -741,11 +741,33 @@ model QuestionnaireSection {
   sortOrder      Int     @default(0) @map("sort_order")
   visibleIf      Json?   @map("visible_if")
 
-  template  QuestionnaireTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  template  QuestionnaireTemplate      @relation(fields: [templateId], references: [id], onDelete: Cascade)
   questions Question[]
+  items     QuestionnaireSectionItem[]
 
   @@index([templateId, sortOrder])
   @@map("questionnaire_sections")
+}
+
+/// A questionnaire REFERENCES a position, never owns it — the same global
+/// Position can be an item in any number of sections/templates and is
+/// still one storage slot (BUILD_PLAN Step 2.2 acceptance criterion).
+/// Coexists with Question for now: Question is the legacy, section-owned
+/// path (still what Data Collection reads — see the Phase A/B/C plan at
+/// /Users/rutanshu/.claude/plans/imperative-coalescing-hollerith.md);
+/// this is the new path new sections are built with going forward.
+model QuestionnaireSectionItem {
+  id         String @id @default(uuid())
+  sectionId  String @map("section_id")
+  positionId String @map("position_id")
+  sortOrder  Int    @default(0) @map("sort_order")
+
+  section  QuestionnaireSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  position Position             @relation(fields: [positionId], references: [id], onDelete: Cascade)
+
+  @@unique([sectionId, positionId])
+  @@index([sectionId, sortOrder])
+  @@map("questionnaire_section_items")
 }
 
 model Question {
@@ -792,9 +814,16 @@ model Question {
 
 /// Where the questionnaire meets the Factor Lab. A question with health BROKEN or
 /// AMBIGUOUS cannot be published — see SPEC.md §3.16.
+/// Bound to EITHER a legacy Question OR a global Position — never both,
+/// enforced in builder/actions.ts's upsertBinding (a DB CHECK constraint
+/// would need a raw-SQL migration; the app-level guard is enough while
+/// only one write path exists). positionId is nullable and added
+/// alongside the existing questionId during the Phase B/C transition —
+/// see the rearchitecture plan referenced on QuestionnaireSectionItem.
 model FactorBinding {
   id                 String         @id @default(uuid())
-  questionId         String         @unique @map("question_id")
+  questionId         String?        @unique @map("question_id")
+  positionId         String?        @unique @map("position_id")
   scope              Scope
   scope3Category     Int?           @map("scope3_category")
   activityType       ActivityType   @map("activity_type")
@@ -813,7 +842,8 @@ model FactorBinding {
   healthCheckedAt    DateTime?      @map("health_checked_at")
   healthMessage      String?        @map("health_message")
 
-  question        Question           @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  question        Question?          @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  position        Position?          @relation(fields: [positionId], references: [id], onDelete: Cascade)
   pinnedFactorSet EmissionFactorSet? @relation(fields: [pinnedFactorSetId], references: [id])
 
   @@index([health])
@@ -845,14 +875,16 @@ model ImpactProfile {
   @@map("impact_profiles")
 }
 
-/// One question's binding as it stood inside a specific ImpactProfile
-/// snapshot. Referenced by question CODE, not questionId — a profile is a
-/// portable record that must still mean something if the question is later
-/// deleted and recreated with the same code.
+/// One binding as it stood inside a specific ImpactProfile snapshot.
+/// Referenced by position CODE (Question.code or Position.positionCode —
+/// they share the same code space during the Phase B/C transition), not a
+/// foreign key — a profile is a portable record that must still mean
+/// something if the underlying row is later deleted and recreated with
+/// the same code.
 model FactorAssignment {
   id                 String         @id @default(uuid())
   impactProfileId    String         @map("impact_profile_id")
-  questionCode       String         @map("question_code")
+  positionCode       String         @map("position_code")
   scope              Scope
   scope3Category     Int?           @map("scope3_category")
   activityType       ActivityType   @map("activity_type")
@@ -863,7 +895,7 @@ model FactorAssignment {
 
   impactProfile ImpactProfile @relation(fields: [impactProfileId], references: [id], onDelete: Cascade)
 
-  @@unique([impactProfileId, questionCode])
+  @@unique([impactProfileId, positionCode])
   @@map("factor_assignments")
 }
 
@@ -1363,11 +1395,13 @@ model Position {
   tags           String[]       @default([])
   createdAt      DateTime       @default(now()) @map("created_at")
 
-  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  parent       Position?            @relation("PositionHierarchy", fields: [parentId], references: [id])
-  children     Position[]           @relation("PositionHierarchy")
+  organization Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  parent       Position?                  @relation("PositionHierarchy", fields: [parentId], references: [id])
+  children     Position[]                 @relation("PositionHierarchy")
   values       PositionValue[]
   assetValues  PositionAssetValue[]
+  sectionItems QuestionnaireSectionItem[]
+  binding      FactorBinding?
 
   @@unique([organizationId, positionCode])
   @@index([organizationId, type])

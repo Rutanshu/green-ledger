@@ -29,7 +29,7 @@ export function supersedeProfile(status: ImpactProfileStatus): ImpactProfileStat
 }
 
 export interface FactorAssignmentLike {
-  questionCode: string;
+  positionCode: string;
   scope: string;
   scope3Category: number | null;
   activityType: string;
@@ -42,7 +42,7 @@ export interface FactorAssignmentLike {
 export interface ProfileDiff {
   added: FactorAssignmentLike[];
   removed: FactorAssignmentLike[];
-  changed: Array<{ questionCode: string; before: FactorAssignmentLike; after: FactorAssignmentLike }>;
+  changed: Array<{ positionCode: string; before: FactorAssignmentLike; after: FactorAssignmentLike }>;
 }
 
 const ASSIGNMENT_FIELDS: readonly (keyof FactorAssignmentLike)[] = [
@@ -59,10 +59,10 @@ function assignmentsEqual(a: FactorAssignmentLike, b: FactorAssignmentLike): boo
   return ASSIGNMENT_FIELDS.every((f) => a[f] === b[f]);
 }
 
-/** What changed between two profile snapshots, keyed by question code (stable across a question being deleted and recreated). */
+/** What changed between two profile snapshots, keyed by position code (stable across the underlying row being deleted and recreated). */
 export function diffProfiles(a: readonly FactorAssignmentLike[], b: readonly FactorAssignmentLike[]): ProfileDiff {
-  const beforeByCode = new Map(a.map((x) => [x.questionCode, x]));
-  const afterByCode = new Map(b.map((x) => [x.questionCode, x]));
+  const beforeByCode = new Map(a.map((x) => [x.positionCode, x]));
+  const afterByCode = new Map(b.map((x) => [x.positionCode, x]));
 
   const added: FactorAssignmentLike[] = [];
   const changed: ProfileDiff["changed"] = [];
@@ -71,7 +71,7 @@ export function diffProfiles(a: readonly FactorAssignmentLike[], b: readonly Fac
     if (!before) {
       added.push(after);
     } else if (!assignmentsEqual(before, after)) {
-      changed.push({ questionCode: code, before, after });
+      changed.push({ positionCode: code, before, after });
     }
   }
   const removed = [...beforeByCode.entries()].filter(([code]) => !afterByCode.has(code)).map(([, v]) => v);

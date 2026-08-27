@@ -8,7 +8,8 @@ import { Label } from "@/components/Label";
 import { SectionForm } from "../SectionForm";
 import { QuestionForm } from "../QuestionForm";
 import { BindingForm } from "../BindingForm";
-import { deleteSection, deleteQuestion } from "../actions";
+import { AddPositionToSectionForm } from "../AddPositionToSectionForm";
+import { deleteSection, deleteQuestion, removeSectionItem } from "../actions";
 import { PublishButton } from "../PublishButton";
 
 export const dynamic = "force-dynamic";
@@ -32,22 +33,28 @@ export default async function TemplateEditorPage({ params }: { params: Promise<{
   const canEdit = can(membership.role, "manage_questionnaire");
   const db = orgScopedClient(membership.org.id);
 
-  const [template, labelOverrides] = await Promise.all([
+  const [template, labelOverrides, allPositions] = await Promise.all([
     db.questionnaireTemplate.findFirst({
       where: { id: templateId },
       include: {
         sections: {
           orderBy: { sortOrder: "asc" },
-          include: { questions: { orderBy: { sortOrder: "asc" }, include: { binding: true } } },
+          include: {
+            questions: { orderBy: { sortOrder: "asc" }, include: { binding: true } },
+            items: { orderBy: { sortOrder: "asc" }, include: { position: { include: { binding: true } } } },
+          },
         },
       },
     }),
     getOrgLabelOverrides(membership.org.id),
+    db.position.findMany({ select: { id: true, positionCode: true, labelKey: true, type: true }, orderBy: { positionCode: "asc" } }),
   ]);
   if (!template) notFound();
 
-  const questionCount = template.sections.reduce((n, s) => n + s.questions.length, 0);
-  const boundCount = template.sections.flatMap((s) => s.questions).filter((q) => q.binding).length;
+  const questionCount = template.sections.reduce((n, s) => n + s.questions.length + s.items.length, 0);
+  const boundCount =
+    template.sections.flatMap((s) => s.questions).filter((q) => q.binding).length +
+    template.sections.flatMap((s) => s.items).filter((i) => i.position.binding).length;
 
   return (
     <>
@@ -145,11 +152,65 @@ export default async function TemplateEditorPage({ params }: { params: Promise<{
                   )}
                 </div>
               ))}
+              {section.items.map((item) => {
+                const p = item.position;
+                return (
+                  <div key={item.id} className="p-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <div className="text-[13px] font-medium">{p.labelKey}</div>
+                        <div className="mt-1 flex flex-wrap gap-1.5 text-xs text-muted">
+                          <span className="font-mono">{p.positionCode}</span>
+                          <span>· {p.type.toLowerCase()}</span>
+                          {p.allowedUnits.length > 0 && <span>· {p.allowedUnits.join("/")}</span>}
+                          <span className="rounded-full bg-track px-1.5 text-accent-sky">library position</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {p.binding && (
+                          <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${HEALTH_STYLE[p.binding.health]}`}>
+                            {p.binding.health.replaceAll("_", " ")}
+                          </span>
+                        )}
+                        {canEdit && (
+                          <form action={removeSectionItem.bind(null, item.id)}>
+                            <button type="submit" className="text-xs text-muted hover:text-crit">Remove</button>
+                          </form>
+                        )}
+                      </div>
+                    </div>
+                    {canEdit && p.type !== "INDICATOR" && (
+                      <BindingForm
+                        positionId={p.id}
+                        existing={
+                          p.binding
+                            ? {
+                                scope: p.binding.scope,
+                                scope3Category: p.binding.scope3Category,
+                                activityType: p.binding.activityType,
+                                method: p.binding.method,
+                                fuelOrMaterialCode: p.binding.fuelOrMaterialCode,
+                                regionStrategy: p.binding.regionStrategy,
+                                outputBasis: p.binding.outputBasis,
+                                health: p.binding.health,
+                              }
+                            : null
+                        }
+                        labelOverrides={labelOverrides}
+                      />
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
             {canEdit && (
-              <div className="p-4 pt-0">
+              <div className="flex flex-col gap-2 p-4 pt-0">
                 <QuestionForm sectionId={section.id} />
+                <AddPositionToSectionForm
+                  sectionId={section.id}
+                  positions={allPositions.filter((p) => !section.items.some((i) => i.positionId === p.id))}
+                />
               </div>
             )}
           </div>

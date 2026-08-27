@@ -13,6 +13,7 @@ const NAV_PRIMARY = [
   { href: "/data-collection", label: "Data Collection", icon: "✎" },
   { href: "/factor-lab", label: "Factor Lab", icon: "⚗" },
   { href: "/builder", label: "Builder", icon: "⚙" },
+  { href: "/positions-library", label: "Position library", icon: "🧱", requires: "manage_questionnaire" as const },
 ];
 
 const NAV_WORKFLOW = [

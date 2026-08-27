@@ -28,10 +28,12 @@ interface Existing {
 
 export function BindingForm({
   questionId,
+  positionId,
   existing,
   labelOverrides,
 }: {
-  questionId: string;
+  questionId?: string;
+  positionId?: string;
   existing: Existing | null;
   labelOverrides: readonly LabelOverride[];
 }) {
@@ -48,7 +50,8 @@ export function BindingForm({
 
   return (
     <form action={formAction} className="mt-2 flex flex-col gap-1.5 rounded-md bg-track p-2.5">
-      <input type="hidden" name="questionId" value={questionId} />
+      {questionId && <input type="hidden" name="questionId" value={questionId} />}
+      {positionId && <input type="hidden" name="positionId" value={positionId} />}
       <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
         <select name="scope" defaultValue={existing?.scope ?? "SCOPE_1"} className="rounded border border-border bg-surface px-1.5 py-1 text-[11px]">
           <option value="SCOPE_1">Scope 1</option>

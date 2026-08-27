@@ -68,7 +68,14 @@ export async function publishTemplate(templateId: string): Promise<ActionState> 
 
   const template = await db.questionnaireTemplate.findFirst({
     where: { id: templateId },
-    include: { sections: { include: { questions: { include: { binding: true } } } } },
+    include: {
+      sections: {
+        include: {
+          questions: { include: { binding: true } },
+          items: { include: { position: { include: { binding: true } } } },
+        },
+      },
+    },
   });
   if (!template) return { ok: false, error: "Template not found." };
 
@@ -85,9 +92,20 @@ export async function publishTemplate(templateId: string): Promise<ActionState> 
 
   const boundQuestions = template.sections
     .flatMap((s) => s.questions)
-    .filter((q): q is typeof q & { binding: NonNullable<typeof q.binding> } => q.binding !== null);
+    .filter((q): q is typeof q & { binding: NonNullable<typeof q.binding> } => q.binding !== null)
+    .map((q) => ({ code: q.code, binding: q.binding }));
+  // A position referenced from several sections of the SAME template would
+  // otherwise be health-checked and snapshotted once per reference — dedupe
+  // by position id first, since it's genuinely one storage slot.
+  const boundPositions = [...new Map(
+    template.sections
+      .flatMap((s) => s.items)
+      .filter((i): i is typeof i & { position: typeof i.position & { binding: NonNullable<typeof i.position.binding> } } => i.position.binding !== null)
+      .map((i) => [i.position.id, { code: i.position.positionCode, binding: i.position.binding }] as const),
+  ).values()];
+  const allBound = [...boundQuestions, ...boundPositions];
   const broken: string[] = [];
-  for (const { binding: b } of boundQuestions) {
+  for (const { binding: b } of allBound) {
     if (!site) break;
     const bases: Array<"LOCATION_BASED" | "MARKET_BASED" | undefined> =
       b.outputBasis === "DUAL" ? ["LOCATION_BASED", "MARKET_BASED"] : [undefined];
@@ -148,8 +166,8 @@ export async function publishTemplate(templateId: string): Promise<ActionState> 
         status: activateProfile("DRAFT"),
         activatedAt: new Date(),
         assignments: {
-          create: boundQuestions.map(({ code, binding: b }) => ({
-            questionCode: code,
+          create: allBound.map(({ code, binding: b }) => ({
+            positionCode: code,
             scope: b.scope,
             scope3Category: b.scope3Category,
             activityType: b.activityType,
@@ -451,10 +469,93 @@ export async function deleteQuestion(questionId: string) {
   revalidatePath(`/builder/${question.section.templateId}`);
 }
 
+// ---------- section items (positions, referenced not owned) ----------
+
+const AddPositionInput = z.object({
+  sectionId: z.string().min(1),
+  positionId: z.string().min(1, "Choose a position."),
+});
+
+/**
+ * A questionnaire REFERENCES an existing global position — it never
+ * creates a new one. The same position can be added to any number of
+ * sections/templates and is still one storage slot (BUILD_PLAN Step 2.2
+ * acceptance criterion) — @@unique([sectionId, positionId]) only stops it
+ * being added twice to the SAME section, not reused elsewhere.
+ */
+export async function addPositionToSection(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const auth = await requireBuilder();
+  if ("error" in auth) return { ok: false, error: auth.error };
+  const parsed = AddPositionInput.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
+  const d = parsed.data;
+
+  const orgId = auth.membership.org.id;
+  const db = orgScopedClient(orgId);
+
+  const section = await db.questionnaireSection.findFirst({
+    where: { id: d.sectionId, template: { organizationId: orgId } },
+    include: { template: true },
+  });
+  if (!section) return { ok: false, error: "Section not found." };
+
+  const position = await db.position.findFirst({ where: { id: d.positionId } });
+  if (!position) return { ok: false, error: "Position not found." };
+
+  const existing = await db.questionnaireSectionItem.findFirst({ where: { sectionId: d.sectionId, positionId: d.positionId } });
+  if (existing) return { ok: false, error: `${position.positionCode} is already in this section.` };
+
+  await withOrgTransaction(orgId, async (tx) => {
+    const count = await tx.questionnaireSectionItem.count({ where: { sectionId: d.sectionId } });
+    const item = await tx.questionnaireSectionItem.create({
+      data: { sectionId: d.sectionId, positionId: d.positionId, sortOrder: count },
+    });
+    await recordAudit(tx, {
+      organizationId: orgId,
+      actorUserId: auth.membership.user.id,
+      action: "CREATE",
+      entityType: "QuestionnaireSectionItem",
+      entityId: item.id,
+      after: item,
+    });
+  });
+
+  revalidatePath(`/builder/${section.templateId}`);
+  return { ok: true };
+}
+
+export async function removeSectionItem(itemId: string) {
+  const auth = await requireBuilder();
+  if ("error" in auth) return;
+  const orgId = auth.membership.org.id;
+  const db = orgScopedClient(orgId);
+
+  const item = await db.questionnaireSectionItem.findFirst({
+    where: { id: itemId, section: { template: { organizationId: orgId } } },
+    include: { section: true },
+  });
+  if (!item) return;
+
+  await withOrgTransaction(orgId, async (tx) => {
+    await tx.questionnaireSectionItem.delete({ where: { id: itemId } });
+    await recordAudit(tx, {
+      organizationId: orgId,
+      actorUserId: auth.membership.user.id,
+      action: "DELETE",
+      entityType: "QuestionnaireSectionItem",
+      entityId: itemId,
+      before: item,
+    });
+  });
+
+  revalidatePath(`/builder/${item.section.templateId}`);
+}
+
 // ---------- factor bindings ----------
 
 const BindingInput = z.object({
-  questionId: z.string().min(1),
+  questionId: z.string().optional(),
+  positionId: z.string().optional(),
   scope: z.enum(["SCOPE_1", "SCOPE_2", "SCOPE_3"]),
   scope3Category: z.coerce.number().int().min(1).max(15).optional().or(z.literal("").transform(() => undefined)),
   activityType: z.enum([
@@ -477,13 +578,30 @@ export async function upsertBinding(_prev: ActionState, formData: FormData): Pro
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
   const d = parsed.data;
 
+  if (!d.questionId && !d.positionId) return { ok: false, error: "No target for this binding." };
+
   const orgId = auth.membership.org.id;
   const db = orgScopedClient(orgId);
-  const question = await db.question.findFirst({
-    where: { id: d.questionId, section: { template: { organizationId: orgId } } },
-    include: { binding: true, section: { select: { templateId: true } } },
-  });
-  if (!question) return { ok: false, error: "Question not found." };
+
+  const question = d.questionId
+    ? await db.question.findFirst({
+        where: { id: d.questionId, section: { template: { organizationId: orgId } } },
+        include: { binding: true, section: { select: { templateId: true } } },
+      })
+    : null;
+  const position = d.positionId
+    ? await db.position.findFirst({ where: { id: d.positionId }, include: { binding: true } })
+    : null;
+  if (d.questionId && !question) return { ok: false, error: "Question not found." };
+  if (d.positionId && !position) return { ok: false, error: "Position not found." };
+
+  // A position-bound item's template comes through the section it's
+  // referenced from, not through ownership (it may be referenced from
+  // several) — revalidate whichever section triggered this save.
+  const templateIdForRevalidate = question
+    ? question.section.templateId
+    : (await db.questionnaireSectionItem.findFirst({ where: { positionId: d.positionId! }, select: { section: { select: { templateId: true } } } }))
+        ?.section.templateId;
 
   // Compute real health immediately — same logic Factor Lab's "Test
   // binding" uses — so a newly-bound question never shows a stale/unknown
@@ -513,11 +631,15 @@ export async function upsertBinding(_prev: ActionState, formData: FormData): Pro
     }
   }
 
+  const bindingWhere = question ? { questionId: d.questionId! } : { positionId: d.positionId! };
+  const previousBinding = question ? question.binding : position!.binding;
+
   await withOrgTransaction(orgId, async (tx) => {
     const binding = await tx.factorBinding.upsert({
-      where: { questionId: d.questionId },
+      where: bindingWhere,
       create: {
-        questionId: d.questionId,
+        questionId: d.questionId ?? null,
+        positionId: d.positionId ?? null,
         scope: d.scope,
         scope3Category: d.scope3Category ?? null,
         activityType: d.activityType,
@@ -545,15 +667,15 @@ export async function upsertBinding(_prev: ActionState, formData: FormData): Pro
     await recordAudit(tx, {
       organizationId: orgId,
       actorUserId: auth.membership.user.id,
-      action: question.binding ? "UPDATE" : "CREATE",
+      action: previousBinding ? "UPDATE" : "CREATE",
       entityType: "FactorBinding",
       entityId: binding.id,
-      before: question.binding,
+      before: previousBinding,
       after: binding,
     });
   });
 
-  revalidatePath(`/builder/${question.section.templateId}`);
+  if (templateIdForRevalidate) revalidatePath(`/builder/${templateIdForRevalidate}`);
   return {
     ok: true,
     error: worst.health === "BROKEN" || worst.health === "AMBIGUOUS" ? `Bound, but health is ${worst.health}: ${worst.message}` : undefined,
