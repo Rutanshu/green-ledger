@@ -15,20 +15,10 @@ export class IllegalRestatementTransitionError extends Error {
   }
 }
 
-export class SelfApprovalError extends Error {
-  constructor() {
-    super("A restatement's approver must be a different person from whoever requested it.");
-    this.name = "SelfApprovalError";
-  }
-}
+export { assertDistinctApprover, SelfApprovalError } from "../workflow/fourEyes";
 
 /** PENDING -> APPROVED or REJECTED; both are terminal. */
 export function decideRestatement(status: RestatementStatus, decision: "APPROVED" | "REJECTED"): RestatementStatus {
   if (status !== "PENDING") throw new IllegalRestatementTransitionError(status, decision);
   return decision;
-}
-
-/** Four-eyes: throws SelfApprovalError if the same person requested and would approve. Call before decideRestatement. */
-export function assertDistinctApprover(requestedById: string, approverId: string): void {
-  if (requestedById === approverId) throw new SelfApprovalError();
 }

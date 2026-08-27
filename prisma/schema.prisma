@@ -865,6 +865,10 @@ model QuestionnaireAssignment {
   dueOn             DateTime?        @map("due_on") @db.Date
   status            AssignmentStatus @default(NOT_STARTED)
   completenessPct   Decimal          @default(0) @map("completeness_pct") @db.Decimal(6, 2)
+  /// Who actually clicked "submit for review" — the four-eyes check
+  /// compares THIS against the approver, not assignedToId (which is just
+  /// the nominal owner and may be null or stale).
+  submittedById     String?          @map("submitted_by_id")
   submittedAt       DateTime?        @map("submitted_at")
   approvedAt        DateTime?        @map("approved_at")
 
@@ -895,6 +899,10 @@ model Answer {
   answeredAt       DateTime?    @map("answered_at")
   documentIds      String[]     @map("document_ids")
   priorPeriodValue Decimal?     @map("prior_period_value") @db.Decimal(20, 6)
+  /// Optimistic concurrency — see lib/concurrency. A write carrying a
+  /// stale value here is rejected rather than silently overwriting
+  /// someone else's more recent save.
+  updatedAt        DateTime     @updatedAt @map("updated_at")
 
   assignment      QuestionnaireAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
   question        Question                @relation(fields: [questionId], references: [id], onDelete: Cascade)

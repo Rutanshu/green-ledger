@@ -12,6 +12,9 @@ import { projectAnswer } from "@/lib/project";
 import { recordAudit } from "@/lib/audit";
 import { assertPeriodWritable, PeriodLockedError } from "@/lib/periods";
 import { evaluateRule, InvalidRuleConditionError, type RuleConfig, type RuleEvalContext } from "@/lib/rules";
+import { assertFreshWrite, StaleWriteError } from "@/lib/concurrency";
+import { assertCompleteForSubmission, IncompleteAssignmentError, transitionAssignment, IllegalAssignmentTransitionError, type AssignmentStatus } from "@/lib/assignments";
+import { assertDistinctApprover, SelfApprovalError } from "@/lib/workflow/fourEyes";
 import { can, ROLE_LABEL } from "@/lib/auth/permissions";
 import type { UnitCode } from "@/lib/units";
 import type { FuelPropertyRecord } from "@/lib/units/fuelProperty";
@@ -22,6 +25,9 @@ const AnswerInput = z.object({
   value: z.coerce.number({ error: "Enter a number." }).finite().nonnegative("Quantity cannot be negative."),
   unit: z.string().min(1, "Choose a unit."),
   dataQuality: z.enum(["MEASURED", "CALCULATED", "ESTIMATED", "PROXY"], { error: "Choose a data quality." }),
+  // Optimistic concurrency (lib/concurrency) — what the form had when it
+  // loaded. Empty string means "I believe there's no existing answer yet."
+  expectedUpdatedAt: z.string().optional().default(""),
 });
 
 export type SubmitAnswerState = {
@@ -46,7 +52,7 @@ export async function submitAnswer(_prev: SubmitAnswerState, formData: FormData)
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
   }
-  const { assignmentId, questionId, value, unit, dataQuality } = parsed.data;
+  const { assignmentId, questionId, value, unit, dataQuality, expectedUpdatedAt } = parsed.data;
 
   const db = orgScopedClient(org.id);
 
@@ -128,6 +134,7 @@ export async function submitAnswer(_prev: SubmitAnswerState, formData: FormData)
     await tx.$executeRawUnsafe(`SET LOCAL app.org_id = '${escapedOrgId}'`);
 
     const beforeAnswer = await tx.answer.findUnique({ where: { assignmentId_questionId: { assignmentId, questionId } } });
+    assertFreshWrite(expectedUpdatedAt || null, beforeAnswer?.updatedAt.toISOString() ?? null);
     const answer = await tx.answer.upsert({
       where: { assignmentId_questionId: { assignmentId, questionId } },
       create: { assignmentId, questionId, valueNumeric: value, unit: unit as never, dataQuality: dataQuality as never, status: "ANSWERED", answeredAt: new Date() },
@@ -283,10 +290,16 @@ export async function submitAnswer(_prev: SubmitAnswerState, formData: FormData)
         periodEnd: period.endsOn,
       },
     );
-    const newStatus = completeness.pct === 0 ? "NOT_STARTED" : completeness.pct === 100 ? "IN_REVIEW" : "IN_PROGRESS";
+    // Completeness alone never promotes an assignment to IN_REVIEW or past
+    // it — that's an explicit human decision (submitAssignment/
+    // approveAssignment below, lib/assignments' state machine). Answering
+    // questions only moves it between NOT_STARTED and IN_PROGRESS; a
+    // status already at IN_REVIEW/APPROVED/LOCKED is left alone here.
+    const inEarlyStage = freshAssignment.status === "NOT_STARTED" || freshAssignment.status === "IN_PROGRESS";
+    const newStatus = inEarlyStage ? (completeness.pct === 0 ? "NOT_STARTED" : "IN_PROGRESS") : freshAssignment.status;
     await tx.questionnaireAssignment.update({
       where: { id: assignmentId },
-      data: { completenessPct: completeness.pct, status: freshAssignment.status === "APPROVED" ? "APPROVED" : newStatus },
+      data: { completenessPct: completeness.pct, status: newStatus },
     });
 
     // Rules — "on entry": every write re-evaluates every active org rule.
@@ -360,6 +373,7 @@ export async function submitAnswer(_prev: SubmitAnswerState, formData: FormData)
     // queries this transaction actually runs on top of that. Measured
     // directly: 2.4s cold vs 0.2s warm for a single query.
     if (e instanceof RuleBlockedError) return { blocked: e.message } as const;
+    if (e instanceof StaleWriteError) return { blocked: e.message } as const;
     throw e;
   });
   if ("blocked" in result) return { ok: false, error: result.blocked };
@@ -375,4 +389,100 @@ export async function submitAnswer(_prev: SubmitAnswerState, formData: FormData)
     emissionsKgCo2e: result.emissionResults.length > 0 ? totalKg.toFixed(3) : undefined,
     emissionsTonnes: result.emissionResults.length > 0 ? toTonnes(totalKg) : undefined,
   };
+}
+
+type WorkflowState = { ok: boolean; error?: string } | null;
+
+/**
+ * NOT_STARTED/IN_PROGRESS -> IN_REVIEW. GHG_TOOL_ARCHITECTURE.md §8.3,
+ * BUILD_PLAN Step 3.2: submission is refused below 100% completeness —
+ * never a silent partial submit.
+ */
+export async function submitAssignment(assignmentId: string): Promise<WorkflowState> {
+  const membership = await getCurrentMembership();
+  if (!membership) return { ok: false, error: "Not signed in." };
+  if (!can(membership.role, "submit_answers")) {
+    return { ok: false, error: `Your role (${ROLE_LABEL[membership.role]}) can't submit this for review.` };
+  }
+  const org = membership.org;
+  const db = orgScopedClient(org.id);
+
+  const assignment = await db.questionnaireAssignment.findFirst({ where: { id: assignmentId, site: { organizationId: org.id } } });
+  if (!assignment) return { ok: false, error: "Assignment not found." };
+
+  try {
+    assertCompleteForSubmission(Number(assignment.completenessPct));
+    transitionAssignment(assignment.status as AssignmentStatus, "IN_REVIEW");
+  } catch (e) {
+    if (e instanceof IncompleteAssignmentError || e instanceof IllegalAssignmentTransitionError) return { ok: false, error: e.message };
+    throw e;
+  }
+
+  const escapedOrgId = org.id.replace(/'/g, "''");
+  await rawPrisma.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe(`SET LOCAL app.org_id = '${escapedOrgId}'`);
+    const updated = await tx.questionnaireAssignment.update({
+      where: { id: assignmentId },
+      data: { status: "IN_REVIEW", submittedById: membership.user.id, submittedAt: new Date() },
+    });
+    await recordAudit(tx, {
+      organizationId: org.id,
+      actorUserId: membership.user.id,
+      action: "UPDATE",
+      entityType: "QuestionnaireAssignment",
+      entityId: assignmentId,
+      before: assignment,
+      after: updated,
+    });
+  });
+
+  revalidatePath("/data-collection");
+  return { ok: true };
+}
+
+/**
+ * IN_REVIEW -> APPROVED. Four-eyes: the approver must be a different
+ * person from whoever submitted it (lib/workflow/fourEyes.ts) — enforced
+ * here, server-side, not just hidden in the UI.
+ */
+export async function approveAssignment(assignmentId: string): Promise<WorkflowState> {
+  const membership = await getCurrentMembership();
+  if (!membership) return { ok: false, error: "Not signed in." };
+  if (!can(membership.role, "manage_questionnaire")) {
+    return { ok: false, error: `Your role (${ROLE_LABEL[membership.role]}) can't approve this.` };
+  }
+  const org = membership.org;
+  const db = orgScopedClient(org.id);
+
+  const assignment = await db.questionnaireAssignment.findFirst({ where: { id: assignmentId, site: { organizationId: org.id } } });
+  if (!assignment) return { ok: false, error: "Assignment not found." };
+
+  try {
+    if (assignment.submittedById) assertDistinctApprover(assignment.submittedById, membership.user.id);
+    transitionAssignment(assignment.status as AssignmentStatus, "APPROVED");
+  } catch (e) {
+    if (e instanceof SelfApprovalError || e instanceof IllegalAssignmentTransitionError) return { ok: false, error: e.message };
+    throw e;
+  }
+
+  const escapedOrgId = org.id.replace(/'/g, "''");
+  await rawPrisma.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe(`SET LOCAL app.org_id = '${escapedOrgId}'`);
+    const updated = await tx.questionnaireAssignment.update({
+      where: { id: assignmentId },
+      data: { status: "APPROVED", approverId: membership.user.id, approvedAt: new Date() },
+    });
+    await recordAudit(tx, {
+      organizationId: org.id,
+      actorUserId: membership.user.id,
+      action: "APPROVE",
+      entityType: "QuestionnaireAssignment",
+      entityId: assignmentId,
+      before: assignment,
+      after: updated,
+    });
+  });
+
+  revalidatePath("/data-collection");
+  return { ok: true };
 }

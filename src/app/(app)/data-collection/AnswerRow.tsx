@@ -10,7 +10,7 @@ interface Props {
   questionId: string;
   code: string;
   allowedUnits: string[];
-  existing: { value: string; unit: string; quality: string } | null;
+  existing: { value: string; unit: string; quality: string; updatedAt: string } | null;
   existingEmissionsKg: string | null;
   canEdit: boolean;
   labelOverrides: readonly LabelOverride[];
@@ -55,6 +55,7 @@ export function AnswerRow({ assignmentId, questionId, code, allowedUnits, existi
         <form action={formAction} className="flex flex-wrap items-center gap-1.5">
           <input type="hidden" name="assignmentId" value={assignmentId} />
           <input type="hidden" name="questionId" value={questionId} />
+          <input type="hidden" name="expectedUpdatedAt" value={existing?.updatedAt ?? ""} />
           <input
             name="value"
             type="number"

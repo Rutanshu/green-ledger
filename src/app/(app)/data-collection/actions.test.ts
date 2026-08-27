@@ -122,12 +122,24 @@ describe('submitAnswer', () => {
   });
 
   it('accepts a valid submission and actually writes it to the database', async () => {
-    const result = await submitAnswer(null, fd({ assignmentId, questionId, value: '15000', unit: 'L', dataQuality: 'MEASURED' }));
+    const before = await rawPrisma.answer.findUnique({ where: { assignmentId_questionId: { assignmentId, questionId } } });
+    const result = await submitAnswer(null, fd({ assignmentId, questionId, value: '15000', unit: 'L', dataQuality: 'MEASURED', expectedUpdatedAt: before?.updatedAt.toISOString() ?? '' }));
     expect(result?.ok).toBe(true);
 
     const row = await rawPrisma.answer.findUnique({ where: { assignmentId_questionId: { assignmentId, questionId } } });
     expect(row?.valueNumeric?.toString()).toBe('15000');
     expect(row?.unit).toBe('L');
+  });
+
+  it('rejects a write carrying a stale expectedUpdatedAt (BUILD_PLAN Step 3.2 acceptance criterion)', async () => {
+    const before = await rawPrisma.answer.findUniqueOrThrow({ where: { assignmentId_questionId: { assignmentId, questionId } } });
+    const staleToken = new Date(before.updatedAt.getTime() - 60_000).toISOString(); // pretend the form loaded a minute before the real last write
+    const result = await submitAnswer(null, fd({ assignmentId, questionId, value: '7777', unit: 'L', dataQuality: 'MEASURED', expectedUpdatedAt: staleToken }));
+    expect(result?.ok).toBe(false);
+    expect(result?.error).toMatch(/changed by someone else/i);
+
+    const row = await rawPrisma.answer.findUnique({ where: { assignmentId_questionId: { assignmentId, questionId } } });
+    expect(row?.valueNumeric?.toString()).not.toBe('7777');
   });
 
   it('refuses to write into another org\'s assignment, even with a valid session', async () => {
@@ -167,7 +179,8 @@ describe('submitAnswer', () => {
   });
 
   it('actually calculates emissions — 15000 L diesel at the real DEFRA factor, not a guess', async () => {
-    const result = await submitAnswer(null, fd({ assignmentId, questionId, value: '15000', unit: 'L', dataQuality: 'MEASURED' }));
+    const before = await rawPrisma.answer.findUnique({ where: { assignmentId_questionId: { assignmentId, questionId } } });
+    const result = await submitAnswer(null, fd({ assignmentId, questionId, value: '15000', unit: 'L', dataQuality: 'MEASURED', expectedUpdatedAt: before?.updatedAt.toISOString() ?? '' }));
     expect(result?.ok).toBe(true);
 
     // DEFRA factor for diesel/stationary combustion is 2.68000 kg CO2e/L

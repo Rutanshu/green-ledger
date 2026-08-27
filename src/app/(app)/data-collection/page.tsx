@@ -6,6 +6,7 @@ import { Label } from "@/components/Label";
 import { AnswerRow } from "./AnswerRow";
 import { evaluateIndicators, EVAL_REASON_LABEL } from "./indicators";
 import { RestatementForm } from "./RestatementForm";
+import { AssignmentWorkflow } from "./AssignmentWorkflow";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,7 @@ export default async function DataCollectionPage() {
   if (!membership) return null;
   const org = membership.org;
   const canEdit = can(membership.role, "submit_answers");
+  const canApprove = can(membership.role, "manage_questionnaire");
   const db = orgScopedClient(org.id);
   const labelOverrides = await getOrgLabelOverrides(org.id);
 
@@ -61,10 +63,20 @@ export default async function DataCollectionPage() {
                   {site.name} <span className="font-normal text-muted">({site.code})</span>
                 </div>
                 {assignment && (
-                  <div className="mt-0.5 text-[13px] text-ink2">
-                    <Label entityKind="STATUS" code={assignment.status} overrides={labelOverrides} /> ·{" "}
-                    {assignment.completenessPct.toString()}% complete
-                  </div>
+                  <>
+                    <div className="mt-0.5 text-[13px] text-ink2">
+                      <Label entityKind="STATUS" code={assignment.status} overrides={labelOverrides} /> ·{" "}
+                      {assignment.completenessPct.toString()}% complete
+                    </div>
+                    <AssignmentWorkflow
+                      assignmentId={assignment.id}
+                      status={assignment.status}
+                      completenessPct={Number(assignment.completenessPct)}
+                      canSubmit={canEdit}
+                      canApprove={canApprove}
+                      isOwnSubmission={assignment.submittedById === membership.user.id}
+                    />
+                  </>
                 )}
               </div>
               {allQuestions.length === 0 ? (
@@ -91,7 +103,7 @@ export default async function DataCollectionPage() {
                             questionId={q.id}
                             code={q.code}
                             allowedUnits={q.allowedUnits}
-                            existing={a ? { value: a.valueNumeric?.toString() ?? "", unit: a.unit ?? "", quality: a.dataQuality ?? "ESTIMATED" } : null}
+                            existing={a ? { value: a.valueNumeric?.toString() ?? "", unit: a.unit ?? "", quality: a.dataQuality ?? "ESTIMATED", updatedAt: a.updatedAt.toISOString() } : null}
                             existingEmissionsKg={emissionRecords.length > 0 ? totalKg.toString() : null}
                             canEdit={canEdit}
                             labelOverrides={labelOverrides}
