@@ -383,6 +383,7 @@ model Organization {
   fuelProperties FuelProperty[]
   importBatches  ImportBatch[]
   positions      Position[]
+  entitlements   Entitlement[]
 
   @@index([isSandbox, sandboxExpiresAt])
   @@map("organizations")
@@ -1053,4 +1054,26 @@ model PositionAssignment {
 
   @@index([positionId, endedOn])
   @@map("position_assignments")
+}
+
+// ─────────────────────────────── entitlements ───────────────────────────────
+// GHG_TOOL_ARCHITECTURE.md §23: "a single can(tenant, featureCode) check
+// used by both the API and the UI... never a boolean scattered through the
+// code." No row for a (org, feature) pair means unrestricted — entitlements
+// are opt-in restrictions for when this app has more than one paying
+// tenant with different plans, not a gate on today's single demo org.
+
+model Entitlement {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  featureCode    String   @map("feature_code")
+  enabled        Boolean  @default(true)
+  /// null = unlimited
+  limitValue     Int?     @map("limit_value")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, featureCode])
+  @@map("entitlements")
 }

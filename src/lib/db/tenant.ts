@@ -10,12 +10,13 @@
  */
 import { rawPrisma } from './client';
 import type { Prisma } from '../../generated/prisma';
+import { runWithOrg } from '../tenancy/context';
 
 /** Models with a required organization_id: every row belongs to exactly one org. */
 const STRICT_ORG_MODELS = new Set([
   'Membership', 'LabelOverride', 'Site', 'SiteAsset', 'ReportingPeriod',
   'QuestionnaireTemplate', 'Document', 'Task', 'AuditEvent', 'Target',
-  'Report', 'ImportBatch', 'ActivityRecord', 'Position',
+  'Report', 'ImportBatch', 'ActivityRecord', 'Position', 'Entitlement',
 ]);
 
 /**
@@ -88,16 +89,22 @@ export function orgScopedClient(orgId: string) {
 
           // Every operation runs inside its own transaction so SET LOCAL and
           // the query itself share one connection — required for RLS to see it.
-          return rawPrisma.$transaction(
-            async (tx) => {
-              await tx.$executeRawUnsafe(`SET LOCAL app.org_id = '${escapedOrgId}'`);
-              const accessor = model.charAt(0).toLowerCase() + model.slice(1);
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              return (tx as any)[accessor][operation](scopedArgs);
-            },
-            // Neon's scale-to-zero cold start can itself take 2-3s, which the
-            // default 5s transaction budget doesn't leave much room around.
-            { timeout: 15000, maxWait: 10000 },
+          // Also populates the AsyncLocalStorage tenant context (see
+          // lib/tenancy/context.ts) for the duration of the operation, so
+          // anything running underneath can read getCurrentOrgId() as an
+          // independent check, not just trust this closure's `orgId`.
+          return runWithOrg(orgId, () =>
+            rawPrisma.$transaction(
+              async (tx) => {
+                await tx.$executeRawUnsafe(`SET LOCAL app.org_id = '${escapedOrgId}'`);
+                const accessor = model.charAt(0).toLowerCase() + model.slice(1);
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                return (tx as any)[accessor][operation](scopedArgs);
+              },
+              // Neon's scale-to-zero cold start can itself take 2-3s, which the
+              // default 5s transaction budget doesn't leave much room around.
+              { timeout: 15000, maxWait: 10000 },
+            ),
           );
         },
       },
@@ -120,11 +127,13 @@ export async function withOrgTransaction<T>(
 ): Promise<T> {
   if (!orgId) throw new Error('withOrgTransaction() requires a non-empty organisation id.');
   const escapedOrgId = orgId.replace(/'/g, "''");
-  return rawPrisma.$transaction(
-    async (tx) => {
-      await tx.$executeRawUnsafe(`SET LOCAL app.org_id = '${escapedOrgId}'`);
-      return fn(tx);
-    },
-    { timeout: 15000, maxWait: 10000 },
+  return runWithOrg(orgId, () =>
+    rawPrisma.$transaction(
+      async (tx) => {
+        await tx.$executeRawUnsafe(`SET LOCAL app.org_id = '${escapedOrgId}'`);
+        return fn(tx);
+      },
+      { timeout: 15000, maxWait: 10000 },
+    ),
   );
 }
