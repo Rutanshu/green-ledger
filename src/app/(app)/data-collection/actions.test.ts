@@ -131,6 +131,18 @@ describe('submitAnswer', () => {
     expect(row?.unit).toBe('L');
   });
 
+  it('persists a comment (Step 3.4 — needed for MANDATORY_COMMENT rules to read anything real)', async () => {
+    const before = await rawPrisma.answer.findUnique({ where: { assignmentId_questionId: { assignmentId, questionId } } });
+    const result = await submitAnswer(null, fd({
+      assignmentId, questionId, value: '15000', unit: 'L', dataQuality: 'MEASURED',
+      expectedUpdatedAt: before?.updatedAt.toISOString() ?? '', comment: 'Per corrected invoice #4471',
+    }));
+    expect(result?.ok).toBe(true);
+
+    const row = await rawPrisma.answer.findUnique({ where: { assignmentId_questionId: { assignmentId, questionId } } });
+    expect(row?.comment).toBe('Per corrected invoice #4471');
+  });
+
   it('rejects a write carrying a stale expectedUpdatedAt (BUILD_PLAN Step 3.2 acceptance criterion)', async () => {
     const before = await rawPrisma.answer.findUniqueOrThrow({ where: { assignmentId_questionId: { assignmentId, questionId } } });
     const staleToken = new Date(before.updatedAt.getTime() - 60_000).toISOString(); // pretend the form loaded a minute before the real last write

@@ -898,6 +898,7 @@ model Answer {
   answeredById     String?      @map("answered_by_id")
   answeredAt       DateTime?    @map("answered_at")
   documentIds      String[]     @map("document_ids")
+  comment          String?
   priorPeriodValue Decimal?     @map("prior_period_value") @db.Decimal(20, 6)
   /// Optimistic concurrency — see lib/concurrency. A write carrying a
   /// stale value here is rejected rather than silently overwriting

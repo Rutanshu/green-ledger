@@ -28,6 +28,7 @@ const AnswerInput = z.object({
   // Optimistic concurrency (lib/concurrency) — what the form had when it
   // loaded. Empty string means "I believe there's no existing answer yet."
   expectedUpdatedAt: z.string().optional().default(""),
+  comment: z.string().optional().default(""),
 });
 
 export type SubmitAnswerState = {
@@ -52,7 +53,7 @@ export async function submitAnswer(_prev: SubmitAnswerState, formData: FormData)
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
   }
-  const { assignmentId, questionId, value, unit, dataQuality, expectedUpdatedAt } = parsed.data;
+  const { assignmentId, questionId, value, unit, dataQuality, expectedUpdatedAt, comment } = parsed.data;
 
   const db = orgScopedClient(org.id);
 
@@ -137,8 +138,8 @@ export async function submitAnswer(_prev: SubmitAnswerState, formData: FormData)
     assertFreshWrite(expectedUpdatedAt || null, beforeAnswer?.updatedAt.toISOString() ?? null);
     const answer = await tx.answer.upsert({
       where: { assignmentId_questionId: { assignmentId, questionId } },
-      create: { assignmentId, questionId, valueNumeric: value, unit: unit as never, dataQuality: dataQuality as never, status: "ANSWERED", answeredAt: new Date() },
-      update: { valueNumeric: value, unit: unit as never, dataQuality: dataQuality as never, status: "ANSWERED", answeredAt: new Date() },
+      create: { assignmentId, questionId, valueNumeric: value, unit: unit as never, dataQuality: dataQuality as never, comment: comment || null, status: "ANSWERED", answeredAt: new Date() },
+      update: { valueNumeric: value, unit: unit as never, dataQuality: dataQuality as never, comment: comment || null, status: "ANSWERED", answeredAt: new Date() },
     });
     await recordAudit(tx, {
       organizationId: org.id,
@@ -312,6 +313,7 @@ export async function submitAnswer(_prev: SubmitAnswerState, formData: FormData)
     const priorPeriodValues: Record<string, string | null> = {};
     const dataQualities: Record<string, string | null> = {};
     const attachmentCounts: Record<string, number> = {};
+    const comments: Record<string, string | null> = {};
     for (const a of freshAssignment.answers) {
       const code = codeById.get(a.questionId);
       if (!code) continue;
@@ -319,12 +321,14 @@ export async function submitAnswer(_prev: SubmitAnswerState, formData: FormData)
       priorPeriodValues[code] = a.priorPeriodValue?.toString() ?? null;
       dataQualities[code] = a.dataQuality ?? null;
       attachmentCounts[code] = a.documentIds.length;
+      comments[code] = a.comment;
     }
     const ruleCtx: RuleEvalContext = {
       positionValues,
       priorPeriodValues,
       dataQualities: dataQualities as RuleEvalContext["dataQualities"],
       attachmentCounts,
+      comments,
       completenessPct: completeness.pct,
     };
 
@@ -479,6 +483,49 @@ export async function approveAssignment(assignmentId: string): Promise<WorkflowS
       entityType: "QuestionnaireAssignment",
       entityId: assignmentId,
       before: assignment,
+      after: updated,
+    });
+  });
+
+  revalidatePath("/data-collection");
+  return { ok: true };
+}
+
+/**
+ * BUILD_PLAN Step 3.6: "a warning requires an audited acknowledgement."
+ * The only thing this does to a WARN-severity RuleViolation — never
+ * re-evaluates the rule, never touches the answer that triggered it.
+ */
+export async function acknowledgeRuleViolation(_prev: WorkflowState, formData: FormData): Promise<WorkflowState> {
+  const membership = await getCurrentMembership();
+  if (!membership) return { ok: false, error: "Not signed in." };
+  if (!can(membership.role, "submit_answers")) {
+    return { ok: false, error: `Your role (${ROLE_LABEL[membership.role]}) can't acknowledge rule violations.` };
+  }
+  const org = membership.org;
+  const violationId = String(formData.get("violationId") ?? "");
+  const comment = String(formData.get("comment") ?? "").trim();
+  if (!comment) return { ok: false, error: "Acknowledging a violation needs a comment." };
+
+  const db = orgScopedClient(org.id);
+  const violation = await db.ruleViolation.findFirst({ where: { id: violationId } });
+  if (!violation) return { ok: false, error: "Violation not found." };
+  if (violation.status !== "OPEN") return { ok: false, error: "Already acknowledged." };
+
+  const escapedOrgId = org.id.replace(/'/g, "''");
+  await rawPrisma.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe(`SET LOCAL app.org_id = '${escapedOrgId}'`);
+    const updated = await tx.ruleViolation.update({
+      where: { id: violationId },
+      data: { status: "ACKNOWLEDGED", acknowledgedById: membership.user.id, acknowledgedAt: new Date(), acknowledgementComment: comment },
+    });
+    await recordAudit(tx, {
+      organizationId: org.id,
+      actorUserId: membership.user.id,
+      action: "UPDATE",
+      entityType: "RuleViolation",
+      entityId: violationId,
+      before: violation,
       after: updated,
     });
   });

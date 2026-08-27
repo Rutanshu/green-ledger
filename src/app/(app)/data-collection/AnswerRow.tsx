@@ -10,7 +10,7 @@ interface Props {
   questionId: string;
   code: string;
   allowedUnits: string[];
-  existing: { value: string; unit: string; quality: string; updatedAt: string } | null;
+  existing: { value: string; unit: string; quality: string; updatedAt: string; comment: string } | null;
   existingEmissionsKg: string | null;
   canEdit: boolean;
   labelOverrides: readonly LabelOverride[];
@@ -88,6 +88,12 @@ export function AnswerRow({ assignmentId, questionId, code, allowedUnits, existi
               </option>
             ))}
           </select>
+          <input
+            name="comment"
+            defaultValue={existing?.comment ?? ""}
+            placeholder="comment (optional)"
+            className="w-32 rounded-md border border-border bg-plane px-2 py-1 text-xs outline-none focus:border-accent"
+          />
           <button
             type="submit"
             disabled={pending}

@@ -7,6 +7,7 @@ import { AnswerRow } from "./AnswerRow";
 import { evaluateIndicators, EVAL_REASON_LABEL } from "./indicators";
 import { RestatementForm } from "./RestatementForm";
 import { AssignmentWorkflow } from "./AssignmentWorkflow";
+import { RuleViolationsPanel } from "./RuleViolationsPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +32,17 @@ export default async function DataCollectionPage() {
       },
     },
   });
+
+  const ruleViolations = await db.ruleViolation.findMany({
+    where: { assignmentId: { in: sites.flatMap((s) => s.assignments.map((a) => a.id)) } },
+    include: { rule: true },
+    orderBy: { createdAt: "asc" },
+  });
+  const violationsByAssignment = new Map<string, typeof ruleViolations>();
+  for (const v of ruleViolations) {
+    if (!v.assignmentId) continue;
+    violationsByAssignment.set(v.assignmentId, [...(violationsByAssignment.get(v.assignmentId) ?? []), v]);
+  }
 
   return (
     <>
@@ -103,7 +115,7 @@ export default async function DataCollectionPage() {
                             questionId={q.id}
                             code={q.code}
                             allowedUnits={q.allowedUnits}
-                            existing={a ? { value: a.valueNumeric?.toString() ?? "", unit: a.unit ?? "", quality: a.dataQuality ?? "ESTIMATED", updatedAt: a.updatedAt.toISOString() } : null}
+                            existing={a ? { value: a.valueNumeric?.toString() ?? "", unit: a.unit ?? "", quality: a.dataQuality ?? "ESTIMATED", updatedAt: a.updatedAt.toISOString(), comment: a.comment ?? "" } : null}
                             existingEmissionsKg={emissionRecords.length > 0 ? totalKg.toString() : null}
                             canEdit={canEdit}
                             labelOverrides={labelOverrides}
@@ -159,6 +171,16 @@ export default async function DataCollectionPage() {
                       {otherQuestions.map((q) => q.code).join(", ")}).
                     </div>
                   )}
+                  <RuleViolationsPanel
+                    violations={(violationsByAssignment.get(assignment!.id) ?? []).map((v) => ({
+                      id: v.id,
+                      ruleName: v.rule.name,
+                      message: v.message,
+                      questionCode: v.questionCode,
+                      status: v.status,
+                      acknowledgementComment: v.acknowledgementComment,
+                    }))}
+                  />
                   {canEdit && (assignment!.period.status === "LOCKED" || assignment!.period.status === "ASSURED") && (
                     <div className="border-t border-grid p-4">
                       <p className="text-xs text-ink2">
