@@ -11,6 +11,7 @@ import { buildFactorCandidates } from "@/lib/db/factor-candidates";
 import { projectAnswer } from "@/lib/project";
 import { recordAudit } from "@/lib/audit";
 import { assertPeriodWritable, PeriodLockedError } from "@/lib/periods";
+import { evaluateRule, InvalidRuleConditionError, type RuleConfig, type RuleEvalContext } from "@/lib/rules";
 import { can, ROLE_LABEL } from "@/lib/auth/permissions";
 import type { UnitCode } from "@/lib/units";
 import type { FuelPropertyRecord } from "@/lib/units/fuelProperty";
@@ -30,6 +31,8 @@ export type SubmitAnswerState = {
   emissionsKgCo2e?: string;
   emissionsTonnes?: string;
 } | null;
+
+class RuleBlockedError extends Error {}
 
 export async function submitAnswer(_prev: SubmitAnswerState, formData: FormData): Promise<SubmitAnswerState> {
   const membership = await getCurrentMembership();
@@ -113,6 +116,11 @@ export async function submitAnswer(_prev: SubmitAnswerState, formData: FormData)
       validTo: p.validTo,
     }));
   }
+
+  // Rules — GHG_TOOL_ARCHITECTURE.md §13, BUILD_PLAN Step 3.6. Read-only
+  // reference data, fetched before the transaction for the same reason as
+  // the factor/GWP/fuel-property reads above.
+  const activeRules = await db.rule.findMany({ where: { isActive: true } });
 
   const escapedOrgId = org.id.replace(/'/g, "''");
 
@@ -281,11 +289,80 @@ export async function submitAnswer(_prev: SubmitAnswerState, formData: FormData)
       data: { completenessPct: completeness.pct, status: freshAssignment.status === "APPROVED" ? "APPROVED" : newStatus },
     });
 
+    // Rules — "on entry": every write re-evaluates every active org rule.
+    // A BLOCK violation throws, rolling back everything above in this same
+    // transaction (the answer, the recalculation, the completeness update)
+    // — a rule never lets half of a rejected write land. A WARN violation
+    // is recorded as an open RuleViolation instead, same transaction.
+    const codeById = new Map(questions.map((q) => [q.id, q.code]));
+    const positionValues: Record<string, string | null> = {};
+    const priorPeriodValues: Record<string, string | null> = {};
+    const dataQualities: Record<string, string | null> = {};
+    const attachmentCounts: Record<string, number> = {};
+    for (const a of freshAssignment.answers) {
+      const code = codeById.get(a.questionId);
+      if (!code) continue;
+      positionValues[code] = a.valueNumeric?.toString() ?? null;
+      priorPeriodValues[code] = a.priorPeriodValue?.toString() ?? null;
+      dataQualities[code] = a.dataQuality ?? null;
+      attachmentCounts[code] = a.documentIds.length;
+    }
+    const ruleCtx: RuleEvalContext = {
+      positionValues,
+      priorPeriodValues,
+      dataQualities: dataQualities as RuleEvalContext["dataQualities"],
+      attachmentCounts,
+      completenessPct: completeness.pct,
+    };
+
+    for (const rule of activeRules) {
+      let verdict: { violated: boolean; message: string };
+      try {
+        verdict = evaluateRule(rule.config as unknown as RuleConfig, ruleCtx);
+      } catch (e) {
+        if (e instanceof InvalidRuleConditionError) continue; // a malformed rule shouldn't block every future submission
+        throw e;
+      }
+      if (!verdict.violated) continue;
+
+      if (rule.severity === "BLOCK") {
+        throw new RuleBlockedError(`Rule "${rule.name}" blocked this submission: ${verdict.message}`);
+      }
+
+      const existing = await tx.ruleViolation.findFirst({
+        where: { ruleId: rule.id, assignmentId, questionCode: question.code, status: { in: ["OPEN", "ACKNOWLEDGED"] } },
+      });
+      if (!existing) {
+        const violation = await tx.ruleViolation.create({
+          data: {
+            organizationId: org.id,
+            ruleId: rule.id,
+            ruleVersion: rule.version,
+            assignmentId,
+            questionCode: question.code,
+            message: verdict.message,
+          },
+        });
+        await recordAudit(tx, {
+          organizationId: org.id,
+          actorUserId: membership.user.id,
+          action: "CREATE",
+          entityType: "RuleViolation",
+          entityId: violation.id,
+          after: violation,
+        });
+      }
+    }
+
     return { calcWarning, emissionResults };
-  }, { timeout: 15000, maxWait: 10000 }); // Neon's scale-to-zero cold start alone can take 2-3s; the
-  // default 5s transaction budget leaves no room for the several
-  // queries this transaction actually runs on top of that. Measured
-  // directly: 2.4s cold vs 0.2s warm for a single query.
+  }, { timeout: 15000, maxWait: 10000 }).catch((e) => { // Neon's scale-to-zero cold start alone can take 2-3s; the
+    // default 5s transaction budget leaves no room for the several
+    // queries this transaction actually runs on top of that. Measured
+    // directly: 2.4s cold vs 0.2s warm for a single query.
+    if (e instanceof RuleBlockedError) return { blocked: e.message } as const;
+    throw e;
+  });
+  if ("blocked" in result) return { ok: false, error: result.blocked };
 
   revalidatePath("/data-collection");
   revalidatePath("/");

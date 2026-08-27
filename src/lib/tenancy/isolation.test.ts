@@ -116,6 +116,15 @@ beforeAll(async () => {
   fixtures.ImpactProfile = await adminPrisma.impactProfile.create({
     data: { organizationId: orgA.id, name: 'Isolation test profile', version: 1 },
   });
+
+  const rule = await adminPrisma.rule.create({
+    data: { organizationId: orgA.id, name: 'Isolation test rule', type: 'HARD_LIMIT', severity: 'WARN', config: { type: 'HARD_LIMIT', condition: 'x <= 1' } },
+  });
+  fixtures.Rule = rule;
+
+  fixtures.RuleViolation = await adminPrisma.ruleViolation.create({
+    data: { organizationId: orgA.id, ruleId: rule.id, ruleVersion: 1, message: 'Isolation test violation' },
+  });
 }, 30000);
 
 afterAll(async () => {
@@ -129,6 +138,7 @@ const STRICT_ORG_MODELS = [
   'Membership', 'LabelOverride', 'Site', 'SiteAsset', 'ReportingPeriod',
   'QuestionnaireTemplate', 'Document', 'Task', 'AuditEvent', 'Target',
   'Report', 'ImportBatch', 'ActivityRecord', 'Position', 'Entitlement', 'ImpactProfile',
+  'Rule', 'RuleViolation',
 ] as const;
 
 // audit_events has UPDATE/DELETE revoked at the database grant level (see

@@ -345,6 +345,26 @@ enum ImpactProfileStatus {
   SUPERSEDED
 }
 
+enum RuleType {
+  HARD_LIMIT
+  PLAUSIBILITY_BAND
+  MANDATORY_COMMENT
+  MANDATORY_ATTACHMENT
+  MIN_DATA_QUALITY
+  CROSS_POSITION_CONSISTENCY
+  COMPLETENESS
+}
+
+enum RuleSeverity {
+  BLOCK
+  WARN
+}
+
+enum RuleViolationStatus {
+  OPEN
+  ACKNOWLEDGED
+}
+
 // ─────────────────────────────── identity ───────────────────────────────
 
 model User {
@@ -394,6 +414,8 @@ model Organization {
   positions      Position[]
   entitlements   Entitlement[]
   impactProfiles ImpactProfile[]
+  rules          Rule[]
+  ruleViolations RuleViolation[]
 
   @@index([isSandbox, sandboxExpiresAt])
   @@map("organizations")
@@ -1061,6 +1083,54 @@ model Report {
 
   @@index([organizationId, reportingPeriodId])
   @@map("reports")
+}
+
+/// GHG_TOOL_ARCHITECTURE.md §13/§4.2, BUILD_PLAN Step 3.6. `config` is the
+/// Json-serialised lib/rules RuleConfig — a formula-language condition
+/// string for HARD_LIMIT/CROSS_POSITION_CONSISTENCY, structured parameters
+/// for the rest. Never eval'd; see lib/rules/index.ts.
+model Rule {
+  id             String       @id @default(uuid())
+  organizationId String       @map("organization_id")
+  name           String
+  type           RuleType
+  severity       RuleSeverity
+  config         Json
+  version        Int          @default(1)
+  isActive       Boolean      @default(true) @map("is_active")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  violations   RuleViolation[]
+
+  @@index([organizationId, isActive])
+  @@map("rules")
+}
+
+/// One flagged instance. Stores the RULE VERSION that produced it (not just
+/// a ruleId) so a later edit to the rule doesn't retroactively change what
+/// an already-recorded violation says it was flagged for.
+model RuleViolation {
+  id                     String              @id @default(uuid())
+  organizationId         String              @map("organization_id")
+  ruleId                 String              @map("rule_id")
+  ruleVersion            Int                 @map("rule_version")
+  assignmentId           String?             @map("assignment_id")
+  questionCode           String?             @map("question_code")
+  message                String
+  status                 RuleViolationStatus @default(OPEN)
+  acknowledgedById       String?             @map("acknowledged_by_id")
+  acknowledgedAt         DateTime?           @map("acknowledged_at")
+  acknowledgementComment String?             @map("acknowledgement_comment")
+  createdAt              DateTime            @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  rule         Rule         @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status])
+  @@index([ruleId])
+  @@map("rule_violations")
 }
 
 model ImportBatch {
