@@ -12,6 +12,7 @@ import { projectAnswer } from "@/lib/project";
 import { recordAudit } from "@/lib/audit";
 import { can, ROLE_LABEL } from "@/lib/auth/permissions";
 import type { UnitCode } from "@/lib/units";
+import type { FuelPropertyRecord } from "@/lib/units/fuelProperty";
 
 const AnswerInput = z.object({
   assignmentId: z.string().min(1),
@@ -81,18 +82,32 @@ export async function submitAnswer(_prev: SubmitAnswerState, formData: FormData)
   let candidates: ReturnType<typeof buildFactorCandidates> = [];
   let gwpValues: Record<string, string> = {};
   let consolidationShare = "1";
+  let fuelProperties: FuelPropertyRecord[] = [];
   if (binding) {
-    const [factorSets, gwpRows, ownership] = await Promise.all([
+    const [factorSets, gwpRows, ownership, fuelPropertyRows] = await Promise.all([
       db.emissionFactorSet.findMany({ include: { factors: true } }),
       rawPrisma.gwpSet.findMany({ where: { name: org.defaultGwpSetId ?? "AR6" } }),
       rawPrisma.siteOwnershipPeriod.findFirst({
         where: { siteId: assignment.siteId, validFrom: { lte: period.endsOn } },
         orderBy: { validFrom: "desc" },
       }),
+      // null organizationId = platform-global (shadowed by an org's own row
+      // for the same fuel+property, same pattern as EmissionFactorSet).
+      db.fuelProperty.findMany({ where: { fuelCode: binding.fuelOrMaterialCode } }),
     ]);
     candidates = buildFactorCandidates(factorSets);
     gwpValues = Object.fromEntries(gwpRows.map((g) => [g.gas, g.gwp100.toString()]));
     consolidationShare = ownership?.consolidationShare.toString() ?? "1";
+    fuelProperties = fuelPropertyRows.map((p) => ({
+      fuelCode: p.fuelCode,
+      property: p.property,
+      value: p.value.toString(),
+      fromUnit: p.fromUnit as UnitCode,
+      toUnit: p.toUnit as UnitCode,
+      source: p.source,
+      validFrom: p.validFrom,
+      validTo: p.validTo,
+    }));
   }
 
   const escapedOrgId = org.id.replace(/'/g, "''");
@@ -152,6 +167,7 @@ export async function submitAnswer(_prev: SubmitAnswerState, formData: FormData)
       const calcInput: Omit<CalcInput, "query"> & { query: Omit<CalcInput["query"], "on"> } = {
         activity: { quantity: projected.quantity, unit: projected.unit, activityStart: projected.activityStart, activityEnd: projected.activityEnd },
         candidates,
+        fuelProperties,
         query: {
           activityType: binding.activityType,
           method: binding.method,
@@ -191,6 +207,7 @@ export async function submitAnswer(_prev: SubmitAnswerState, formData: FormData)
             quantityNormalised: r.quantityNormalised.toString(),
             unitNormalised: r.unitNormalised as never,
             unitConversionFactor: r.unitConversionFactor.toString(),
+            unitBridgedVia: r.unitBridgedVia,
             factorId: r.factorId,
             factorValue: r.factorValue.toString(),
             factorUnitNumerator: r.factorUnitNumerator as never,

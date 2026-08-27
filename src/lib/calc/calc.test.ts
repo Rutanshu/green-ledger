@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import Decimal from 'decimal.js';
 import { calculateEmissions, calculateDualBasis, sumKg, toTonnes, CALC_ENGINE_VERSION, type CalcInput } from './index';
 import type { CandidateFactor } from '../factors';
-import { UnitMismatchError } from '../units';
+import { NoFuelPropertyError, type FuelPropertyRecord } from '../units/fuelProperty';
 
 const d = (s: string) => new Date(s + 'T00:00:00Z');
 
@@ -84,12 +84,38 @@ describe('calculation engine', () => {
     expect(r.emissionsKgCo2e.toString()).toBe('38056');
   });
 
-  it('THROWS on a unit-dimension mismatch rather than producing a wrong number', () => {
+  it('THROWS on a unit-dimension mismatch with no fuel property to bridge it, rather than producing a wrong number', () => {
     expect(() =>
       calculateEmissions(base({
         activity: { quantity: '100', unit: 'KWH', activityStart: d('2026-03-01'), activityEnd: d('2026-03-31') },
       })),
-    ).toThrow(UnitMismatchError);
+    ).toThrow(NoFuelPropertyError);
+  });
+
+  it('bridges a cross-dimension mismatch when a matching fuel property is supplied', () => {
+    // 1 L diesel ~ 10 kWh (illustrative NCV) — bridges L -> KWH so the
+    // KWH-recorded activity can still hit the L-denominated factor.
+    const dieselNcv: FuelPropertyRecord = {
+      fuelCode: 'diesel', property: 'ncv', value: '10', fromUnit: 'L', toUnit: 'KWH',
+      source: 'Test NCV', validFrom: d('2020-01-01'), validTo: null,
+    };
+    const [r] = calculateEmissions(base({
+      activity: { quantity: '100', unit: 'KWH', activityStart: d('2026-03-01'), activityEnd: d('2026-03-31') },
+      fuelProperties: [dieselNcv],
+    }));
+    expect(r.quantityNormalised.toString()).toBe('10'); // 100 KWH / 10 (L->KWH factor) = 10 L
+    expect(r.unitBridgedVia).toBe('Test NCV (ncv)');
+    expect(r.emissionsKgCo2e.toString()).toBe('26.8'); // 10 L x 2.68
+  });
+
+  it('does not bridge same-dimension conversions — a plain unit convert stays cheaper and unmarked', () => {
+    const [r] = calculateEmissions(base({
+      activity: { quantity: '14.2', unit: 'M3', activityStart: d('2026-03-01'), activityEnd: d('2026-03-31') },
+      fuelProperties: [
+        { fuelCode: 'diesel', property: 'ncv', value: '10', fromUnit: 'L', toUnit: 'KWH', source: 'unused', validFrom: d('2020-01-01'), validTo: null },
+      ],
+    }));
+    expect(r.unitBridgedVia).toBeNull();
   });
 
   it('applies and snapshots the consolidation share', () => {

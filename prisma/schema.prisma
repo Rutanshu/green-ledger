@@ -858,6 +858,8 @@ model EmissionRecord {
   quantityNormalised    Decimal   @map("quantity_normalised") @db.Decimal(24, 12)
   unitNormalised        UnitCode  @map("unit_normalised")
   unitConversionFactor  Decimal   @map("unit_conversion_factor") @db.Decimal(24, 12)
+  /// the fuel property's source citation, set only when the conversion crossed a unit dimension (lib/units/fuelProperty.ts)
+  unitBridgedVia        String?   @map("unit_bridged_via")
   factorId              String?   @map("factor_id")
   factorValue           Decimal   @map("factor_value") @db.Decimal(24, 12)
   factorUnitNumerator   UnitCode  @map("factor_unit_numerator")

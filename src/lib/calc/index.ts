@@ -10,7 +10,8 @@
  * Bump CALC_ENGINE_VERSION whenever the formula changes. It is stored on every record.
  */
 import Decimal from 'decimal.js';
-import { convert, type UnitCode } from '../units';
+import { type UnitCode } from '../units';
+import { convertOrBridge, type FuelPropertyRecord } from '../units/fuelProperty';
 import {
   resolveFactor, sliceByFactorValidity,
   type CandidateFactor, type ResolveQuery, type EmissionBasis, type Gas,
@@ -39,6 +40,15 @@ export interface CalcInput {
   consolidationShare: Decimal | string | number;
   /** from the FactorBinding; e.g. 12 for a question answered per month */
   multiplier?: Decimal | string | number;
+  /**
+   * Dated, sourced calorific-value/density records — the only thing
+   * allowed to cross a unit dimension (CLAUDE.md rule 4). Optional and
+   * defaults to none, so existing same-dimension callers are unaffected;
+   * a factor whose denominator is a different dimension than the
+   * activity's unit throws NoFuelPropertyError if no matching property
+   * is supplied, same as it always threw UnitMismatchError before.
+   */
+  fuelProperties?: readonly FuelPropertyRecord[];
 }
 
 export interface CalcResult {
@@ -48,6 +58,8 @@ export interface CalcResult {
   quantityNormalised: Decimal;
   unitNormalised: UnitCode;
   unitConversionFactor: Decimal;
+  /** the fuel property's source citation, present only when the conversion crossed a dimension */
+  unitBridgedVia: string | null;
   factorId: string;
   factorValue: Decimal;
   factorUnitNumerator: UnitCode;
@@ -74,7 +86,7 @@ const dayCount = (a: Date, b: Date) => Math.round((b.getTime() - a.getTime()) / 
  * More than one when the activity spans a factor change (day-weighted split).
  */
 export function calculateEmissions(input: CalcInput): CalcResult[] {
-  const { activity, candidates, query, gwpValues, gwpSetName } = input;
+  const { activity, candidates, query, gwpValues, gwpSetName, fuelProperties = [] } = input;
 
   const rawQuantity = new Decimal(activity.quantity);
   if (rawQuantity.isNegative()) throw new Error('Quantity cannot be negative.');
@@ -88,8 +100,14 @@ export function calculateEmissions(input: CalcInput): CalcResult[] {
   return slices.map((slice) => {
     const f = slice.factor;
 
-    // Unit conversion. Throws UnitMismatchError across dimensions — by design.
-    const conv = convert(rawQuantity, activity.unit, f.unitDenominator);
+    // Same-dimension unit conversion when possible; crosses a dimension only
+    // via a dated fuel property (calorific value / density) for this exact
+    // fuel, valid on the activity's start date. Throws NoFuelPropertyError
+    // (no coercion) if the activity's unit and the factor's denominator are
+    // in different dimensions and no matching property was supplied.
+    const conv = convertOrBridge(
+      rawQuantity, activity.unit, f.unitDenominator, f.fuelOrMaterialCode, fuelProperties, activity.activityStart,
+    );
 
     // Day-weight this slice's share of the activity.
     const weight = new Decimal(slice.days).div(totalDays);
@@ -108,6 +126,7 @@ export function calculateEmissions(input: CalcInput): CalcResult[] {
       quantityNormalised,
       unitNormalised: f.unitDenominator,
       unitConversionFactor: conv.factor,
+      unitBridgedVia: conv.usedBridge ? `${conv.propertyUsed.source} (${conv.propertyUsed.property})` : null,
       factorId: f.id,
       factorValue,
       factorUnitNumerator: f.unitNumerator,
