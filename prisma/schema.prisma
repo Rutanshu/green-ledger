@@ -425,6 +425,7 @@ model Organization {
   fuelProperties   FuelProperty[]
   importBatches    ImportBatch[]
   responsibilities Responsibility[]
+  positions        Position[]
   entitlements     Entitlement[]
   impactProfiles   ImpactProfile[]
   rules            Rule[]
@@ -531,14 +532,16 @@ model Site {
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
-  organization     Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  parentSite       Site?                     @relation("SiteHierarchy", fields: [parentSiteId], references: [id])
-  childSites       Site[]                    @relation("SiteHierarchy")
-  assets           SiteAsset[]
-  ownershipPeriods SiteOwnershipPeriod[]
-  activityRecords  ActivityRecord[]
-  assignments      QuestionnaireAssignment[]
-  responsibilities Responsibility[]
+  organization        Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  parentSite          Site?                     @relation("SiteHierarchy", fields: [parentSiteId], references: [id])
+  childSites          Site[]                    @relation("SiteHierarchy")
+  assets              SiteAsset[]
+  ownershipPeriods    SiteOwnershipPeriod[]
+  activityRecords     ActivityRecord[]
+  assignments         QuestionnaireAssignment[]
+  responsibilities    Responsibility[]
+  positionValues      PositionValue[]
+  positionAssetValues PositionAssetValue[]
 
   @@unique([organizationId, code])
   @@index([organizationId, siteType])
@@ -611,6 +614,7 @@ model ReportingPeriod {
   assignments      QuestionnaireAssignment[]
   reports          Report[]
   restatements     Restatement[]
+  positionValues   PositionValue[]
 
   @@unique([organizationId, label])
   @@map("reporting_periods")
@@ -1313,6 +1317,119 @@ model ResponsibilityAssignment {
 
   @@index([responsibilityId, endedOn])
   @@map("responsibility_assignments")
+}
+
+// ─────────────────────────────── positions (atomic data field) ───────────────────────────────
+// GHG_TOOL_ARCHITECTURE.md's Position: the atom of the whole product,
+// global within a tenant and reusable across any number of questionnaires
+// — NOT owned by one, unlike Question today (BUILD_PLAN Step 2.2, Phase A
+// of the approved rearchitecture plan). Phase A is additive-only: nothing
+// reads or writes these tables yet, and Question/Answer/FactorBinding stay
+// the live path until Phase C cuts the app over. Phase A does not attempt
+// the questionnaire-assembly change (Phase B) or the calc-path cutover
+// (Phase C) — see /Users/rutanshu/.claude/plans/imperative-coalescing-hollerith.md.
+
+enum PositionType {
+  ASSET
+  FLOW
+  INDICATOR
+  OVERVIEW
+  QUESTION
+  TEXT
+}
+
+/// Type and dimension are immutable once any PositionValue/PositionAssetValue
+/// references this position — enforced by lib/positions/assertPositionMutable,
+/// not by the database (a check constraint can't see across tables cheaply;
+/// the app-level guard runs inside the same transaction as the update).
+model Position {
+  id             String         @id @default(uuid())
+  organizationId String         @map("organization_id")
+  /// permanent — never reused for a different meaning even if relabelled
+  positionCode   String         @map("position_code")
+  labelKey       String         @map("label_key")
+  type           PositionType
+  dimension      UnitDimension?
+  allowedUnits   UnitCode[]     @map("allowed_units")
+  defaultUnit    UnitCode?      @map("default_unit")
+  parentId       String?        @map("parent_id")
+  /// -> Responsibility, not User — ownership is a role, not a person
+  ownerId        String?        @map("owner_id")
+  helpTextKey    String?        @map("help_text_key")
+  visibleIf      Json?          @map("visible_if")
+  /// INDICATOR only — a parsed lib/formula/ AST, never a raw string, so it
+  /// stays queryable/type-checkable at rest rather than re-parsed on read
+  formulaAst     Json?          @map("formula_ast")
+  tags           String[]       @default([])
+  createdAt      DateTime       @default(now()) @map("created_at")
+
+  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  parent       Position?            @relation("PositionHierarchy", fields: [parentId], references: [id])
+  children     Position[]           @relation("PositionHierarchy")
+  values       PositionValue[]
+  assetValues  PositionAssetValue[]
+
+  @@unique([organizationId, positionCode])
+  @@index([organizationId, type])
+  @@map("positions")
+}
+
+/// FLOW / QUESTION / TEXT positions. `line` is reserved now for Phase E's
+/// multi-line ledger (many lines per position/site/period) — always 1
+/// through Phase D, so this table's shape doesn't need to change again
+/// when that phase lands. Field list deliberately mirrors Answer's, since
+/// Phase C's data migration/cutover maps one to the other 1:1.
+model PositionValue {
+  id                String       @id @default(uuid())
+  positionId        String       @map("position_id")
+  siteId            String       @map("site_id")
+  reportingPeriodId String       @map("reporting_period_id")
+  line              Int          @default(1)
+  valueNumeric      Decimal?     @map("value_numeric") @db.Decimal(20, 6)
+  valueText         String?      @map("value_text")
+  valueJson         Json?        @map("value_json")
+  unit              UnitCode?
+  dataQuality       DataQuality? @map("data_quality")
+  isNotApplicable   Boolean      @default(false) @map("is_not_applicable")
+  naReason          String?      @map("na_reason")
+  status            AnswerStatus @default(UNANSWERED)
+  answeredById      String?      @map("answered_by_id")
+  answeredAt        DateTime?    @map("answered_at")
+  documentIds       String[]     @map("document_ids")
+  comment           String?
+  priorPeriodValue  Decimal?     @map("prior_period_value") @db.Decimal(20, 6)
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+
+  position Position        @relation(fields: [positionId], references: [id], onDelete: Cascade)
+  site     Site            @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  period   ReportingPeriod @relation(fields: [reportingPeriodId], references: [id], onDelete: Cascade)
+
+  @@unique([positionId, siteId, reportingPeriodId, line], map: "position_values_unique_line")
+  @@map("position_values")
+}
+
+/// ASSET positions — open-ended validity, keyed (position, site,
+/// valid_from). A change writes a NEW row; this table is never UPDATEd in
+/// place once a row exists (see lib/positions/resolveAssetValue, Phase D).
+model PositionAssetValue {
+  id           String    @id @default(uuid())
+  positionId   String    @map("position_id")
+  siteId       String    @map("site_id")
+  validFrom    DateTime  @map("valid_from") @db.Date
+  validTo      DateTime? @map("valid_to") @db.Date
+  valueNumeric Decimal?  @map("value_numeric") @db.Decimal(20, 6)
+  valueText    String?   @map("value_text")
+  valueJson    Json?     @map("value_json")
+  unit         UnitCode?
+  createdById  String?   @map("created_by_id")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  position Position @relation(fields: [positionId], references: [id], onDelete: Cascade)
+  site     Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@unique([positionId, siteId, validFrom])
+  @@index([positionId, siteId, validFrom])
+  @@map("position_asset_values")
 }
 
 // ─────────────────────────────── entitlements ───────────────────────────────

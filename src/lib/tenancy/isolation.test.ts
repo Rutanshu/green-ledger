@@ -113,6 +113,10 @@ beforeAll(async () => {
     data: { organizationId: orgA.id, featureCode: 'isolation_test_feature' },
   });
 
+  fixtures.Position = await adminPrisma.position.create({
+    data: { organizationId: orgA.id, positionCode: 'isolation_test_position', labelKey: 'Isolation test position', type: 'FLOW' },
+  });
+
   fixtures.ImpactProfile = await adminPrisma.impactProfile.create({
     data: { organizationId: orgA.id, name: 'Isolation test profile', version: 1 },
   });
@@ -148,7 +152,7 @@ afterAll(async () => {
 const STRICT_ORG_MODELS = [
   'Membership', 'LabelOverride', 'Site', 'SiteAsset', 'ReportingPeriod',
   'QuestionnaireTemplate', 'Document', 'Task', 'AuditEvent', 'Target',
-  'Report', 'ImportBatch', 'ActivityRecord', 'Responsibility', 'Entitlement', 'ImpactProfile',
+  'Report', 'ImportBatch', 'ActivityRecord', 'Responsibility', 'Entitlement', 'ImpactProfile', 'Position',
   'Rule', 'RuleViolation', 'Restatement', 'MappingProfile',
 ] as const;
 
