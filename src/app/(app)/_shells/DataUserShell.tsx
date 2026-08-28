@@ -4,13 +4,25 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { signOut } from "../../login/actions";
+import type { Role } from "@/lib/auth/permissions";
 
-const NAV = [
+const NAV_DATA_INPUTTER = [
   { href: "/", label: "Home", icon: "⌂" },
   { href: "/tasks", label: "My Tasks", icon: "☑" },
   { href: "/enter-data", label: "Enter Data", icon: "✎" },
   { href: "/import", label: "Upload Data", icon: "📥" },
   { href: "/my-submissions", label: "My Submissions", icon: "▤" },
+  { href: "/help", label: "Help", icon: "?" },
+] as const;
+
+// Read Only can't submit, upload, or track "my" anything — a nav built
+// for someone who does those things just reads as broken links to
+// someone who can't. This is a viewer: a dashboard, the facility list,
+// the raw data itself, and help.
+const NAV_READ_ONLY = [
+  { href: "/", label: "Home", icon: "⌂" },
+  { href: "/sites", label: "Facilities", icon: "▤" },
+  { href: "/data-collection", label: "Data", icon: "✎" },
   { href: "/help", label: "Help", icon: "?" },
 ] as const;
 
@@ -21,13 +33,16 @@ function isActive(pathname: string, href: string) {
 export function DataUserShell({
   orgName,
   userName,
+  role,
   children,
 }: {
   orgName: string;
   userName: string;
+  role: Role;
   children: ReactNode;
 }) {
   const pathname = usePathname();
+  const NAV = role === "READ_ONLY" ? NAV_READ_ONLY : NAV_DATA_INPUTTER;
 
   return (
     <div className="flex min-h-screen flex-col lg:grid lg:grid-cols-[224px_1fr]">
@@ -57,6 +72,9 @@ export function DataUserShell({
       <div className="flex min-w-0 flex-1 flex-col pb-16 lg:pb-0">
         <div className="glass sticky top-0 z-10 flex items-center gap-3 rounded-none border-x-0 border-t-0 px-5 py-3">
           <span className="text-[14px] font-medium">{orgName}</span>
+          {role === "READ_ONLY" && (
+            <span className="rounded-full bg-track px-2 py-0.5 text-[11px] font-semibold text-ink2">View only</span>
+          )}
           <div className="flex-1" />
           <span className="hidden text-[13px] text-ink2 sm:inline">{userName}</span>
           <form action={signOut}>

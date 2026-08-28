@@ -6,6 +6,7 @@ import { can } from "@/lib/auth/permissions";
 import { getOrgLabelOverrides } from "@/lib/labels/getOrgOverrides";
 import { Label } from "@/components/Label";
 import { HEALTH_LABEL } from "@/lib/factors";
+import { formatQuestionLabel } from "@/lib/labels/formatQuestionLabel";
 import { SectionForm } from "../SectionForm";
 import { QuestionForm } from "../QuestionForm";
 import { BindingForm } from "../BindingForm";
@@ -105,7 +106,7 @@ export default async function TemplateEditorPage({ params }: { params: Promise<{
                 <div key={q.id} className="p-4">
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <div className="text-[13px] font-medium">{q.label}</div>
+                      <div className="text-[13px] font-medium">{formatQuestionLabel(q.label, "each period")}</div>
                       {q.helpText && <div className="mt-0.5 text-xs text-ink2">{q.helpText}</div>}
                       <div className="mt-1 flex flex-wrap gap-1.5 text-xs text-muted">
                         <span className="font-mono">{q.code}</span>

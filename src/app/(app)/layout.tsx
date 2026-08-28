@@ -21,7 +21,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     return (
       <>
         {impersonator && <ImpersonationBanner />}
-        <DataUserShell orgName={membership.org.legalName} userName={userName}>
+        <DataUserShell orgName={membership.org.legalName} userName={userName} role={membership.role}>
           {children}
         </DataUserShell>
       </>

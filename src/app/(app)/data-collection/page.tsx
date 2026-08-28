@@ -8,6 +8,7 @@ import { evaluateIndicators, EVAL_REASON_LABEL } from "./indicators";
 import { RestatementForm } from "./RestatementForm";
 import { AssignmentWorkflow } from "./AssignmentWorkflow";
 import { RuleViolationsPanel } from "./RuleViolationsPanel";
+import { formatQuestionLabel } from "@/lib/labels/formatQuestionLabel";
 
 export const dynamic = "force-dynamic";
 
@@ -145,7 +146,7 @@ export default async function DataCollectionPage() {
                           return (
                             <tr key={q.id} className="border-t border-grid/60">
                               <td className="px-4 py-2 align-top">
-                                <div className="font-medium">{q.label}</div>
+                                <div className="font-medium">{formatQuestionLabel(q.label, assignment!.period.label)}</div>
                                 <div className="mt-0.5 flex flex-wrap gap-1.5 text-xs text-muted">
                                   <span className="font-mono">{q.code}</span>
                                   {q.computedDimension && <span>· {q.computedDimension}</span>}

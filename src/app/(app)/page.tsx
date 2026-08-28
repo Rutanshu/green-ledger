@@ -86,7 +86,11 @@ function Tile({ label, value, unit, note }: { label: string; value: string; unit
 
 export default async function Home() {
   const membership = await getCurrentMembership();
-  if (membership && (membership.role === "DATA_INPUTTER" || membership.role === "READ_ONLY")) {
+  // Read Only gets this same informational dashboard, not the task-
+  // oriented Data User home — there's nothing for them to do, but
+  // plenty to see: sites, completeness, and total emissions. Nothing
+  // below this point is a write action, so it's already safe as-is.
+  if (membership && membership.role === "DATA_INPUTTER") {
     return <DataUserHome membership={membership} />;
   }
 

@@ -14,6 +14,7 @@ import {
 } from '../src/lib/factors';
 import { computeCompleteness, type VisibilityRule } from '../src/lib/visibility';
 import { hashPassword } from '../src/lib/auth/password';
+import { formatQuestionLabel } from '../src/lib/labels/formatQuestionLabel';
 import {
   GWP_AR6,
   ASSET_TYPES,
@@ -91,8 +92,14 @@ async function ensureTasks(orgId: string) {
   const tasks: Array<{ title: string; description: string; priority: number; entityType: string; entityId: string }> = [];
 
   for (const q of brokenBindings) {
+    // A broken binding is a property of the question/factor config, not
+    // any one period or asset instance — q.label can carry
+    // {{asset.name}}/{{period.label}} placeholders authored for a
+    // per-asset templating pass that was never built (see
+    // formatQuestionLabel's own comment); "each period" reads sensibly
+    // here since this task isn't scoped to one.
     tasks.push({
-      title: `Fix broken binding: ${q.label}`,
+      title: `Fix broken binding: ${formatQuestionLabel(q.label, 'each period')}`,
       description: q.binding!.healthMessage ?? 'No matching emission factor.',
       priority: 1,
       entityType: 'FactorBinding',
