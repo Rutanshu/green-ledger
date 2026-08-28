@@ -138,3 +138,25 @@ export async function withOrgTransaction<T>(
     ),
   );
 }
+
+/**
+ * The Super Admin portal's cross-org screens (Companies, System Logs,
+ * Templates, ...) need to read RLS-protected tables — sites,
+ * reporting_periods, audit_events, and the rest of the FORCE ROW LEVEL
+ * SECURITY list in the org_scoping_rls migration — across every org at
+ * once. There is no BYPASSRLS role deployed (tracked as follow-up in that
+ * migration's own comment), so the only correct way to do this without
+ * silently getting zero rows back is one SET LOCAL app.org_id per org,
+ * not a single unscoped query. Sequential, not Promise.all — each call
+ * needs its own connection's session-local setting.
+ */
+export async function withEachOrg<T>(
+  orgIds: readonly string[],
+  fn: (tx: Prisma.TransactionClient, orgId: string) => Promise<T>,
+): Promise<T[]> {
+  const results: T[] = [];
+  for (const orgId of orgIds) {
+    results.push(await withOrgTransaction(orgId, (tx) => fn(tx, orgId)));
+  }
+  return results;
+}

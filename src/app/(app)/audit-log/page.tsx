@@ -1,38 +1,10 @@
 import { getCurrentMembership } from "@/lib/demo-org";
 import { orgScopedClient } from "@/lib/db/tenant";
 import { can } from "@/lib/auth/permissions";
+import { ACTION_LABEL, ENTITY_LABEL } from "@/lib/audit/labels";
 import { Denied } from "../_components/Denied";
 
 export const dynamic = "force-dynamic";
-
-// Audit actions are internal, system-level vocabulary — not something an
-// org renames — so this is a plain display map rather than routed
-// through the full Label system (see §11 of the redesign spec).
-const ACTION_LABEL: Record<string, string> = {
-  CREATE: "Created",
-  UPDATE: "Updated",
-  DELETE: "Deleted",
-  LOCK: "Locked",
-  UNLOCK: "Unlocked",
-  APPROVE: "Approved",
-  REJECT: "Sent back",
-  RECALCULATE: "Recalculated",
-  EXPORT: "Exported",
-  LOGIN: "Signed in",
-  IMPORT: "Imported",
-  RESTATE: "Restated",
-};
-
-const ENTITY_LABEL: Record<string, string> = {
-  PositionValue: "a data entry",
-  ActivityRecord: "an activity record",
-  EmissionRecord: "an emissions calculation",
-  QuestionnaireAssignment: "a facility's submission",
-  RuleViolation: "a data-quality flag",
-  Restatement: "a correction to a locked period",
-  ReportingPeriod: "a reporting period",
-  Report: "a report",
-};
 
 export default async function AuditLogPage() {
   const membership = await getCurrentMembership();

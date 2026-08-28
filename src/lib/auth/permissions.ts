@@ -18,12 +18,13 @@ export type Capability =
   | 'manage_questionnaire' // Builder: author/publish questions
   | 'submit_answers' // Data Collection
   | 'manage_tasks' // mark tasks done/reopen
-  | 'view'; // read every screen
+  | 'view' // read every screen
+  | 'manage_platform'; // the Super Admin portal itself — cross-company, not gated per-org
 
 const MATRIX: Record<Role, readonly Capability[]> = {
   SUPER_ADMIN: [
     'manage_org', 'manage_users', 'manage_sites', 'manage_factors',
-    'manage_questionnaire', 'submit_answers', 'manage_tasks', 'view',
+    'manage_questionnaire', 'submit_answers', 'manage_tasks', 'view', 'manage_platform',
   ],
   DATA_MANAGER: ['manage_sites', 'manage_factors', 'manage_questionnaire', 'submit_answers', 'manage_tasks', 'view'],
   DATA_INPUTTER: ['submit_answers', 'view'],

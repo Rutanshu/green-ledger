@@ -7,7 +7,7 @@
 
 export type AuditAction =
   | 'CREATE' | 'UPDATE' | 'DELETE' | 'LOCK' | 'UNLOCK' | 'APPROVE' | 'REJECT'
-  | 'RECALCULATE' | 'EXPORT' | 'LOGIN' | 'IMPORT' | 'RESTATE';
+  | 'RECALCULATE' | 'EXPORT' | 'LOGIN' | 'IMPORT' | 'RESTATE' | 'IMPERSONATE';
 
 interface AuditEventClient {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

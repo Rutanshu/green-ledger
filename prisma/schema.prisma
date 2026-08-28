@@ -301,6 +301,7 @@ enum AuditAction {
   LOGIN
   IMPORT
   RESTATE
+  IMPERSONATE
 }
 
 enum DocumentType {
