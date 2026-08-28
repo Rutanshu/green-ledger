@@ -2,6 +2,7 @@ import { getCurrentMembership } from "@/lib/demo-org";
 import { orgScopedClient } from "@/lib/db/tenant";
 import { can } from "@/lib/auth/permissions";
 import { Denied } from "../_components/Denied";
+import { SourcesTabs } from "../_components/SourcesTabs";
 import { PositionForm } from "./PositionForm";
 import { deletePosition } from "./actions";
 
@@ -32,6 +33,7 @@ export default async function PositionsLibraryPage() {
 
   return (
     <>
+      <SourcesTabs />
       <h1 className="text-xl font-semibold">Position library</h1>
       <p className="mt-0.5 text-[13px] text-ink2">
         The global pool every questionnaire is assembled from. A position lives here once, independent of any

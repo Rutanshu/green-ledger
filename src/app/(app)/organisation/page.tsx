@@ -1,7 +1,7 @@
 import { getCurrentMembership } from "@/lib/demo-org";
 import { can } from "@/lib/auth/permissions";
 import { Denied } from "../_components/Denied";
-import { CONSOLIDATION_LABEL } from "@/lib/org/consolidationLabel";
+import { OrganisationForm } from "./OrganisationForm";
 
 export const dynamic = "force-dynamic";
 
@@ -22,19 +22,22 @@ export default async function OrganisationPage() {
 
   return (
     <>
-      <h1 className="text-xl font-semibold">Organisation</h1>
+      <h1 className="text-xl font-semibold">Company Structure</h1>
       <p className="mt-0.5 text-[13px] text-ink2">
         Consolidation approach and base year decide how every later number is scoped. Changing them after
         publication means restating figures.
       </p>
 
-      <div className="mt-5 max-w-lg rounded-[11px] glass">
-        <Row label="Legal name" value={org.legalName} />
-        <Row label="How you count shared sites" value={CONSOLIDATION_LABEL[org.consolidationApproach] ?? org.consolidationApproach} />
-        <Row label="Base year" value={String(org.baseYear ?? "—")} />
-        <Row label="Base year rationale" value={org.baseYearRationale ?? "—"} />
-        <Row label="Fiscal year starts" value={`month ${org.fiscalYearStartMonth}`} />
-        <Row label="Locale" value={org.locale} />
+      <OrganisationForm
+        legalName={org.legalName}
+        consolidationApproach={org.consolidationApproach}
+        baseYear={org.baseYear}
+        baseYearRationale={org.baseYearRationale ?? ""}
+        fiscalYearStartMonth={org.fiscalYearStartMonth}
+        locale={org.locale}
+      />
+
+      <div className="mt-3 max-w-lg rounded-[11px] glass">
         <Row label="Default GWP set" value={org.defaultGwpSetId ?? "—"} />
       </div>
     </>

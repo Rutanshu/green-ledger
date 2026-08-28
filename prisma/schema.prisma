@@ -366,6 +366,11 @@ enum RuleViolationStatus {
   ACKNOWLEDGED
 }
 
+enum CorrectionRequestStatus {
+  OPEN
+  RESOLVED
+}
+
 enum RestatementStatus {
   PENDING
   APPROVED
@@ -410,28 +415,29 @@ model Organization {
   createdAt             DateTime              @default(now()) @map("created_at")
   updatedAt             DateTime              @updatedAt @map("updated_at")
 
-  memberships      Membership[]
-  sites            Site[]
-  periods          ReportingPeriod[]
-  factorSets       EmissionFactorSet[]
-  templates        QuestionnaireTemplate[]
-  documents        Document[]
-  tasks            Task[]
-  auditEvents      AuditEvent[]
-  targets          Target[]
-  reports          Report[]
-  labelOverrides   LabelOverride[]
-  vocabulary       VocabularyEntry[]
-  fuelProperties   FuelProperty[]
-  importBatches    ImportBatch[]
-  responsibilities Responsibility[]
-  positions        Position[]
-  entitlements     Entitlement[]
-  impactProfiles   ImpactProfile[]
-  rules            Rule[]
-  ruleViolations   RuleViolation[]
-  restatements     Restatement[]
-  mappingProfiles  MappingProfile[]
+  memberships        Membership[]
+  sites              Site[]
+  periods            ReportingPeriod[]
+  factorSets         EmissionFactorSet[]
+  templates          QuestionnaireTemplate[]
+  documents          Document[]
+  tasks              Task[]
+  auditEvents        AuditEvent[]
+  targets            Target[]
+  reports            Report[]
+  labelOverrides     LabelOverride[]
+  vocabulary         VocabularyEntry[]
+  fuelProperties     FuelProperty[]
+  importBatches      ImportBatch[]
+  responsibilities   Responsibility[]
+  positions          Position[]
+  entitlements       Entitlement[]
+  impactProfiles     ImpactProfile[]
+  rules              Rule[]
+  ruleViolations     RuleViolation[]
+  correctionRequests CorrectionRequest[]
+  restatements       Restatement[]
+  mappingProfiles    MappingProfile[]
 
   @@index([isSandbox, sandboxExpiresAt])
   @@map("organizations")
@@ -1234,6 +1240,31 @@ model RuleViolation {
   @@map("rule_violations")
 }
 
+/// Phase 2 of the redesign (imperative-coalescing-hollerith.md): the
+/// review screen's "send it back with a note" outcome — a real correction
+/// loop, distinct from the heavier locked-period Restatement flow.
+/// Requesting one does not touch the PositionValue itself; the submitter
+/// edits and resubmits through the normal submitAnswer() path, which is
+/// what actually clears it (see lib/reviews).
+model CorrectionRequest {
+  id              String                  @id @default(uuid())
+  organizationId  String                  @map("organization_id")
+  positionValueId String                  @map("position_value_id")
+  requestedById   String                  @map("requested_by_id")
+  note            String
+  status          CorrectionRequestStatus @default(OPEN)
+  resolvedById    String?                 @map("resolved_by_id")
+  resolvedAt      DateTime?               @map("resolved_at")
+  createdAt       DateTime                @default(now()) @map("created_at")
+
+  organization  Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  positionValue PositionValue @relation(fields: [positionValueId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status])
+  @@index([positionValueId, status])
+  @@map("correction_requests")
+}
+
 /// GHG_TOOL_ARCHITECTURE.md §12/§4.7, BUILD_PLAN Step 3.5. Long-format
 /// import — one row per Answer (site_code, question_code, value, unit,
 /// data_quality) — rather than a wide spreadsheet with one column per
@@ -1440,10 +1471,11 @@ model PositionValue {
   priorPeriodValue  Decimal?     @map("prior_period_value") @db.Decimal(20, 6)
   updatedAt         DateTime     @updatedAt @map("updated_at")
 
-  position        Position         @relation(fields: [positionId], references: [id], onDelete: Cascade)
-  site            Site             @relation(fields: [siteId], references: [id], onDelete: Cascade)
-  period          ReportingPeriod  @relation(fields: [reportingPeriodId], references: [id], onDelete: Cascade)
-  activityRecords ActivityRecord[]
+  position           Position            @relation(fields: [positionId], references: [id], onDelete: Cascade)
+  site               Site                @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  period             ReportingPeriod     @relation(fields: [reportingPeriodId], references: [id], onDelete: Cascade)
+  activityRecords    ActivityRecord[]
+  correctionRequests CorrectionRequest[]
 
   @@unique([positionId, siteId, reportingPeriodId, line], map: "position_values_unique_line")
   @@map("position_values")

@@ -6,29 +6,27 @@ import type { ReactNode } from "react";
 import { signOut } from "../login/actions";
 import { can, ROLE_LABEL, type Role } from "@/lib/auth/permissions";
 
+// Redesign spec §01/§02 — the Admin portal's nav, restructured around
+// what a reviewer/manager's day looks like rather than the app's own
+// internal model names.
 const NAV_PRIMARY = [
-  { href: "/how-it-works", label: "How it works", icon: "◎" },
-  { href: "/", label: "Dashboard", icon: "▦" },
-  { href: "/sites", label: "Sites", icon: "▤" },
+  { href: "/", label: "Overview", icon: "▦" },
+  { href: "/progress", label: "Reporting Progress", icon: "◔" },
+  { href: "/review", label: "Review Data", icon: "✓", requires: "manage_questionnaire" as const },
   { href: "/data-collection", label: "Data Collection", icon: "✎" },
-  { href: "/factor-lab", label: "Factor Lab", icon: "⚗" },
-  { href: "/builder", label: "Builder", icon: "⚙" },
-  { href: "/positions-library", label: "Position library", icon: "🧱", requires: "manage_questionnaire" as const },
-];
-
-const NAV_WORKFLOW = [
-  { href: "/tasks", label: "Tasks", icon: "☑" },
-  { href: "/import", label: "Import", icon: "📥", requires: "submit_answers" as const },
-  { href: "/documents", label: "Documents", icon: "🗎" },
   { href: "/reports", label: "Reports", icon: "▧" },
 ];
 
+const NAV_COMPANY = [
+  { href: "/sites", label: "Facilities", icon: "▤", requires: "manage_sites" as const },
+  { href: "/sources", label: "Emission Sources", icon: "⚗", requires: "manage_factors" as const },
+  { href: "/users", label: "Users", icon: "☖", requires: "manage_users" as const },
+];
+
 const NAV_ADMIN = [
-  { href: "/organisation", label: "Organisation", icon: "◱", requires: "manage_org" as const },
-  { href: "/positions", label: "Responsibilities", icon: "🧑‍💼", requires: "manage_sites" as const },
-  { href: "/periods", label: "Periods", icon: "◔" },
-  { href: "/labels", label: "Labels", icon: "🏷" },
-  { href: "/users", label: "Users & roles", icon: "☖", requires: "manage_users" as const },
+  { href: "/organisation", label: "Company Structure", icon: "◱", requires: "manage_org" as const },
+  { href: "/audit-log", label: "Audit Log", icon: "🕐", requires: "manage_org" as const },
+  { href: "/settings", label: "Settings", icon: "⚙", requires: "manage_org" as const },
 ];
 
 interface NavItem {
@@ -86,9 +84,9 @@ export function AppShell({
         </div>
         <NavGroup items={NAV_PRIMARY} pathname={pathname} role={role} />
         <div className="px-2.5 pb-1.5 pt-4 text-[10.5px] font-semibold uppercase tracking-wider text-muted">
-          Workflow
+          Company
         </div>
-        <NavGroup items={NAV_WORKFLOW} pathname={pathname} role={role} />
+        <NavGroup items={NAV_COMPANY} pathname={pathname} role={role} />
         <div className="px-2.5 pb-1.5 pt-4 text-[10.5px] font-semibold uppercase tracking-wider text-muted">
           Admin
         </div>

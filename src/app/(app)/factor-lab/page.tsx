@@ -4,6 +4,7 @@ import { can } from "@/lib/auth/permissions";
 import { getOrgLabelOverrides } from "@/lib/labels/getOrgOverrides";
 import { Label } from "@/components/Label";
 import { HEALTH_LABEL } from "@/lib/factors";
+import { SourcesTabs } from "../_components/SourcesTabs";
 import { retestBinding } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -43,6 +44,7 @@ export default async function FactorLabPage() {
 
   return (
     <>
+      <SourcesTabs />
       <h1 className="text-xl font-semibold">Factor Lab</h1>
       <p className="mt-0.5 text-[13px] text-ink2">Factor sets, and the health of every question's binding to them.</p>
 

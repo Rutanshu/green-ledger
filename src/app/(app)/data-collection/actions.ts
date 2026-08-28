@@ -193,6 +193,14 @@ export async function submitAnswer(_prev: SubmitAnswerState, formData: FormData)
       after: positionValue,
     });
 
+    // A resubmit is what actually clears a correction request (Phase 2's
+    // Review Data screen) — resolving it here rather than requiring a
+    // separate step means the reviewer never has to remember to close it.
+    await tx.correctionRequest.updateMany({
+      where: { positionValueId: positionValue.id, status: "OPEN" },
+      data: { status: "RESOLVED", resolvedById: membership.user.id, resolvedAt: new Date() },
+    });
+
     let calcWarning: string | undefined;
     let emissionResults: CalcResult[] = [];
 
@@ -440,6 +448,7 @@ export async function submitAnswer(_prev: SubmitAnswerState, formData: FormData)
   revalidatePath("/reports");
   revalidatePath("/enter-data");
   revalidatePath("/my-submissions");
+  revalidatePath("/review");
 
   const totalKg = sumKg(result.emissionResults);
   const primary = result.emissionResults[0];

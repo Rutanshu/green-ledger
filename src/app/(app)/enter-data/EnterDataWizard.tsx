@@ -5,6 +5,7 @@ import Link from "next/link";
 import { submitAnswer } from "../data-collection/actions";
 import { labelText } from "@/components/Label";
 import { CalculationBreakdown } from "@/components/CalculationBreakdown";
+import { formatQuestionLabel } from "@/lib/labels/formatQuestionLabel";
 import type { LabelOverride } from "@/lib/labels";
 
 export interface WizardQuestion {
@@ -41,15 +42,6 @@ function StepBar({ index }: { index: number }) {
       ))}
     </div>
   );
-}
-
-// Some question labels were authored with {{asset.name}}/{{period.label}}
-// placeholders for a per-asset templating pass that was never built —
-// resolve what we can (the period) and fall back gracefully for the rest,
-// rather than showing raw template syntax now that this wizard is the
-// first screen to render .label instead of the bare question code.
-function formatQuestionLabel(label: string, periodLabel: string): string {
-  return label.replace(/\{\{period\.label\}\}/g, periodLabel).replace(/\{\{asset\.name\}\}/g, "this equipment");
 }
 
 function RowKV({ k, v }: { k: string; v: string }) {

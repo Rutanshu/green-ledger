@@ -17,7 +17,7 @@ const STRICT_ORG_MODELS = new Set([
   'Membership', 'LabelOverride', 'Site', 'SiteAsset', 'ReportingPeriod',
   'QuestionnaireTemplate', 'Document', 'Task', 'AuditEvent', 'Target',
   'Report', 'ImportBatch', 'ActivityRecord', 'Responsibility', 'Entitlement', 'ImpactProfile', 'Position',
-  'Rule', 'RuleViolation', 'Restatement', 'MappingProfile',
+  'Rule', 'RuleViolation', 'Restatement', 'MappingProfile', 'CorrectionRequest',
 ]);
 
 /**

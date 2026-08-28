@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getCurrentMembership } from "@/lib/demo-org";
 import { orgScopedClient } from "@/lib/db/tenant";
 import { can } from "@/lib/auth/permissions";
+import { SourcesTabs } from "../_components/SourcesTabs";
 import { CreateTemplateForm } from "./CreateTemplateForm";
 
 export const dynamic = "force-dynamic";
@@ -25,6 +26,7 @@ export default async function BuilderPage() {
 
   return (
     <>
+      <SourcesTabs />
       <h1 className="text-xl font-semibold">Builder</h1>
       <p className="mt-0.5 text-[13px] text-ink2">
         {canEdit
