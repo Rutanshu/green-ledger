@@ -1,9 +1,10 @@
 import Link from "next/link";
-import { getCurrentOrg } from "@/lib/demo-org";
+import { getCurrentMembership, getCurrentOrg } from "@/lib/demo-org";
 import { orgScopedClient, withOrgTransaction } from "@/lib/db/tenant";
 import { toTonnes } from "@/lib/calc";
 import { getOrgLabelOverrides } from "@/lib/labels/getOrgOverrides";
 import { Label } from "@/components/Label";
+import { DataUserHome } from "./_shells/DataUserHome";
 import Decimal from "decimal.js";
 
 export const dynamic = "force-dynamic";
@@ -84,6 +85,11 @@ function Tile({ label, value, unit, note }: { label: string; value: string; unit
 }
 
 export default async function Home() {
+  const membership = await getCurrentMembership();
+  if (membership && (membership.role === "DATA_INPUTTER" || membership.role === "READ_ONLY")) {
+    return <DataUserHome membership={membership} />;
+  }
+
   const data = await getDashboardData();
 
   if (!data) {

@@ -29,6 +29,11 @@ const AnswerInput = z.object({
   // loaded. Empty string means "I believe there's no existing answer yet."
   expectedUpdatedAt: z.string().optional().default(""),
   comment: z.string().optional().default(""),
+  // "Save as draft" (the guided wizard, Phase 1): saved and calculated like
+  // any other answer, but excluded from computeCompleteness()'s satisfied
+  // set below, so it can't push an assignment to 100% and get submitted
+  // for review before the person who entered it says it's ready.
+  draft: z.enum(["true", "false"]).optional().default("false"),
 });
 
 export type SubmitAnswerState = {
@@ -37,6 +42,20 @@ export type SubmitAnswerState = {
   calcWarning?: string;
   emissionsKgCo2e?: string;
   emissionsTonnes?: string;
+  /** The primary (first, for a dual-basis binding: location-based) EmissionRecord's traceability fields — spec §6, "how was this calculated." */
+  breakdown?: {
+    quantityNormalised: string;
+    unitNormalised: string;
+    factorValue: string;
+    factorUnitNumerator: string;
+    factorUnitDenominator: string;
+    factorSource: string;
+    factorVersion: string;
+    gwpValue: string;
+    gwpSet: string;
+    emissionsKgCo2e: string;
+    calcEngineVersion: string;
+  };
 } | null;
 
 class RuleBlockedError extends Error {}
@@ -53,7 +72,8 @@ export async function submitAnswer(_prev: SubmitAnswerState, formData: FormData)
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
   }
-  const { assignmentId, questionId, value, unit, dataQuality, expectedUpdatedAt, comment } = parsed.data;
+  const { assignmentId, questionId, value, unit, dataQuality, expectedUpdatedAt, comment, draft } = parsed.data;
+  const answerStatus = draft === "true" ? "DRAFT" : "ANSWERED";
 
   const db = orgScopedClient(org.id);
 
@@ -160,8 +180,8 @@ export async function submitAnswer(_prev: SubmitAnswerState, formData: FormData)
     assertFreshWrite(expectedUpdatedAt || null, beforePositionValue?.updatedAt.toISOString() ?? null);
     const positionValue = await tx.positionValue.upsert({
       where: positionValueKey,
-      create: { positionId: position.id, siteId: assignment.siteId, reportingPeriodId: assignment.reportingPeriodId, line: 1, valueNumeric: value, unit: unit as never, dataQuality: dataQuality as never, comment: comment || null, status: "ANSWERED", answeredAt: new Date() },
-      update: { valueNumeric: value, unit: unit as never, dataQuality: dataQuality as never, comment: comment || null, status: "ANSWERED", answeredAt: new Date() },
+      create: { positionId: position.id, siteId: assignment.siteId, reportingPeriodId: assignment.reportingPeriodId, line: 1, valueNumeric: value, unit: unit as never, dataQuality: dataQuality as never, comment: comment || null, status: answerStatus, answeredAt: new Date(), answeredById: membership.user.id },
+      update: { valueNumeric: value, unit: unit as never, dataQuality: dataQuality as never, comment: comment || null, status: answerStatus, answeredAt: new Date(), answeredById: membership.user.id },
     });
     await recordAudit(tx, {
       organizationId: org.id,
@@ -418,13 +438,31 @@ export async function submitAnswer(_prev: SubmitAnswerState, formData: FormData)
   revalidatePath("/data-collection");
   revalidatePath("/");
   revalidatePath("/reports");
+  revalidatePath("/enter-data");
+  revalidatePath("/my-submissions");
 
   const totalKg = sumKg(result.emissionResults);
+  const primary = result.emissionResults[0];
   return {
     ok: true,
     calcWarning: result.calcWarning,
     emissionsKgCo2e: result.emissionResults.length > 0 ? totalKg.toFixed(3) : undefined,
     emissionsTonnes: result.emissionResults.length > 0 ? toTonnes(totalKg) : undefined,
+    breakdown: primary
+      ? {
+          quantityNormalised: primary.quantityNormalised.toString(),
+          unitNormalised: primary.unitNormalised,
+          factorValue: primary.factorValue.toString(),
+          factorUnitNumerator: primary.factorUnitNumerator,
+          factorUnitDenominator: primary.factorUnitDenominator,
+          factorSource: primary.factorSource,
+          factorVersion: primary.factorVersion,
+          gwpValue: primary.gwpValue.toString(),
+          gwpSet: primary.gwpSet,
+          emissionsKgCo2e: primary.emissionsKgCo2e.toFixed(3),
+          calcEngineVersion: primary.calcEngineVersion,
+        }
+      : undefined,
   };
 }
 
