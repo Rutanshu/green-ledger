@@ -124,10 +124,10 @@ export async function stageImport(_prev: ActionState, formData: FormData): Promi
 }
 
 /**
- * Writes every ACCEPTED row's Answer, reusing the same pure lib/calc
- * functions submitAnswer/restatement use. before* is captured here (not
- * at stage time) so revertImport restores exactly what commitImport
- * actually overwrote.
+ * Writes every ACCEPTED row's PositionValue, reusing the same pure
+ * lib/calc functions submitAnswer/restatement use. before* is captured
+ * here (not at stage time) so revertImport restores exactly what
+ * commitImport actually overwrote.
  */
 export async function commitImport(batchId: string): Promise<ActionState> {
   const membership = await getCurrentMembership();
@@ -174,29 +174,45 @@ export async function commitImport(batchId: string): Promise<ActionState> {
           continue;
         }
 
-        const beforeAnswer = await tx.answer.findUnique({ where: { assignmentId_questionId: { assignmentId: assignment.id, questionId: question.id } } });
-        const answer = await tx.answer.upsert({
-          where: { assignmentId_questionId: { assignmentId: assignment.id, questionId: question.id } },
-          create: { assignmentId: assignment.id, questionId: question.id, valueNumeric: row.value, unit: row.unit as never, dataQuality: row.dataQuality as never, status: "ANSWERED", answeredAt: new Date() },
+        // Step 2.2 Phase C: same lazy resolve-or-create as submitAnswer.
+        const position = await tx.position.upsert({
+          where: { organizationId_positionCode: { organizationId: org.id, positionCode: question.code } },
+          create: {
+            organizationId: org.id,
+            positionCode: question.code,
+            labelKey: question.label,
+            type: question.inputType === "INDICATOR" ? "INDICATOR" : "FLOW",
+            dimension: question.unitDimension,
+            allowedUnits: question.allowedUnits,
+          },
+          update: {},
+        });
+        const positionValueKey = {
+          positionId_siteId_reportingPeriodId_line: { positionId: position.id, siteId: site.id, reportingPeriodId: assignment.reportingPeriodId, line: 1 },
+        } as const;
+        const beforePositionValue = await tx.positionValue.findUnique({ where: positionValueKey });
+        const positionValue = await tx.positionValue.upsert({
+          where: positionValueKey,
+          create: { positionId: position.id, siteId: site.id, reportingPeriodId: assignment.reportingPeriodId, line: 1, valueNumeric: row.value, unit: row.unit as never, dataQuality: row.dataQuality as never, status: "ANSWERED", answeredAt: new Date() },
           update: { valueNumeric: row.value, unit: row.unit as never, dataQuality: row.dataQuality as never, status: "ANSWERED", answeredAt: new Date() },
         });
         await tx.importRow.update({
           where: { id: row.id },
           data: {
-            answerId: answer.id,
-            beforeValue: beforeAnswer?.valueNumeric ?? null,
-            beforeUnit: beforeAnswer?.unit ?? null,
-            beforeDataQuality: beforeAnswer?.dataQuality ?? null,
+            positionValueId: positionValue.id,
+            beforeValue: beforePositionValue?.valueNumeric ?? null,
+            beforeUnit: beforePositionValue?.unit ?? null,
+            beforeDataQuality: beforePositionValue?.dataQuality ?? null,
           },
         });
         await recordAudit(tx, {
           organizationId: org.id,
           actorUserId: membership.user.id,
           action: "IMPORT",
-          entityType: "Answer",
-          entityId: answer.id,
-          before: beforeAnswer,
-          after: answer,
+          entityType: "PositionValue",
+          entityId: positionValue.id,
+          before: beforePositionValue,
+          after: positionValue,
         });
 
         const binding = question.binding;
@@ -212,10 +228,10 @@ export async function commitImport(batchId: string): Promise<ActionState> {
             periodStart: period.startsOn,
             periodEnd: period.endsOn,
           });
-          const beforeActivity = await tx.activityRecord.findFirst({ where: { answerId: answer.id } });
+          const beforeActivity = await tx.activityRecord.findFirst({ where: { positionValueId: positionValue.id } });
           const activityData = {
             organizationId: org.id, siteId: site.id, reportingPeriodId: assignment.reportingPeriodId,
-            answerId: answer.id, importBatchId: batchId, ...projected, status: "SUBMITTED" as const,
+            positionValueId: positionValue.id, importBatchId: batchId, ...projected, status: "SUBMITTED" as const,
           };
           const activityRecord = beforeActivity
             ? await tx.activityRecord.update({ where: { id: beforeActivity.id }, data: activityData })
@@ -275,11 +291,11 @@ export async function commitImport(batchId: string): Promise<ActionState> {
 }
 
 /**
- * Only for a COMMITTED batch. Restores each row's Answer to its
- * before-commit value (or deletes it, if the row created a new answer
+ * Only for a COMMITTED batch. Restores each row's PositionValue to its
+ * before-commit value (or deletes it, if the row created a new value
  * rather than overwriting one — beforeValue null means exactly that, since
- * a real Answer is never written with a null value by any path in this
- * app). Deletes the calc lineage this batch created.
+ * a real PositionValue is never written with a null value by any path in
+ * this app). Deletes the calc lineage this batch created.
  */
 export async function revertImport(batchId: string): Promise<ActionState> {
   const membership = await getCurrentMembership();
@@ -290,7 +306,7 @@ export async function revertImport(batchId: string): Promise<ActionState> {
   const org = membership.org;
   const db = orgScopedClient(org.id);
 
-  const batch = await db.importBatch.findFirst({ where: { id: batchId }, include: { rows: { where: { answerId: { not: null } } } } });
+  const batch = await db.importBatch.findFirst({ where: { id: batchId }, include: { rows: { where: { positionValueId: { not: null } } } } });
   if (!batch) return { ok: false, error: "Import batch not found." };
   if (batch.status !== "COMMITTED") return { ok: false, error: `Batch is ${batch.status.toLowerCase()}, not committed.` };
 
@@ -302,12 +318,12 @@ export async function revertImport(batchId: string): Promise<ActionState> {
     await tx.activityRecord.deleteMany({ where: { importBatchId: batchId } });
 
     for (const row of batch.rows) {
-      if (!row.answerId) continue;
+      if (!row.positionValueId) continue;
       if (row.beforeValue === null) {
-        await tx.answer.delete({ where: { id: row.answerId } }).catch(() => null);
+        await tx.positionValue.delete({ where: { id: row.positionValueId } }).catch(() => null);
       } else {
-        await tx.answer.update({
-          where: { id: row.answerId },
+        await tx.positionValue.update({
+          where: { id: row.positionValueId },
           data: { valueNumeric: row.beforeValue, unit: row.beforeUnit, dataQuality: row.beforeDataQuality },
         });
       }

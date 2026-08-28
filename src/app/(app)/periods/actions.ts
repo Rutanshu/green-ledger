@@ -62,7 +62,23 @@ export async function requestRestatement(_prev: ActionState, formData: FormData)
     return { ok: false, error: `Period ${assignment.period.label} isn't locked — edit the answer directly.` };
   }
 
-  const existing = await db.answer.findUnique({ where: { assignmentId_questionId: { assignmentId, questionId } } });
+  const question = await db.question.findFirst({ where: { id: questionId, section: { template: { organizationId: org.id } } } });
+  if (!question) return { ok: false, error: "Question not found." };
+
+  // Step 2.2 Phase C: the current value, if any, now lives in PositionValue.
+  const position = await db.position.findFirst({ where: { organizationId: org.id, positionCode: question.code } });
+  const existing = position
+    ? await db.positionValue.findUnique({
+        where: {
+          positionId_siteId_reportingPeriodId_line: {
+            positionId: position.id,
+            siteId: assignment.siteId,
+            reportingPeriodId: assignment.reportingPeriodId,
+            line: 1,
+          },
+        },
+      })
+    : null;
 
   const diff: RestatementDiff = {
     assignmentId,
@@ -82,7 +98,7 @@ export async function requestRestatement(_prev: ActionState, formData: FormData)
       data: {
         organizationId: org.id,
         reportingPeriodId: assignment.reportingPeriodId,
-        entityType: "Answer",
+        entityType: "PositionValue",
         entityId: `${assignmentId}:${questionId}`,
         reason,
         diff: diff as never,
@@ -166,22 +182,37 @@ export async function decideRestatementAction(restatementId: string, decision: "
     const unit = diff.after.unit as UnitCode;
     const dataQuality = diff.after.dataQuality as "MEASURED" | "CALCULATED" | "ESTIMATED" | "PROXY";
 
-    const beforeAnswer = await tx.answer.findUnique({
-      where: { assignmentId_questionId: { assignmentId: diff.assignmentId, questionId: diff.questionId } },
+    // Step 2.2 Phase C: same lazy resolve-or-create as submitAnswer — a
+    // question authored before the cutover may not have a Position yet.
+    const position = await tx.position.upsert({
+      where: { organizationId_positionCode: { organizationId: org.id, positionCode: question.code } },
+      create: {
+        organizationId: org.id,
+        positionCode: question.code,
+        labelKey: question.label,
+        type: question.inputType === "INDICATOR" ? "INDICATOR" : "FLOW",
+        dimension: question.unitDimension,
+        allowedUnits: question.allowedUnits,
+      },
+      update: {},
     });
-    const answer = await tx.answer.upsert({
-      where: { assignmentId_questionId: { assignmentId: diff.assignmentId, questionId: diff.questionId } },
-      create: { assignmentId: diff.assignmentId, questionId: diff.questionId, valueNumeric: value, unit, dataQuality, status: "ANSWERED", answeredAt: new Date() },
+    const positionValueKey = {
+      positionId_siteId_reportingPeriodId_line: { positionId: position.id, siteId: assignment.siteId, reportingPeriodId: assignment.reportingPeriodId, line: 1 },
+    } as const;
+    const beforePositionValue = await tx.positionValue.findUnique({ where: positionValueKey });
+    const positionValue = await tx.positionValue.upsert({
+      where: positionValueKey,
+      create: { positionId: position.id, siteId: assignment.siteId, reportingPeriodId: assignment.reportingPeriodId, line: 1, valueNumeric: value, unit, dataQuality, status: "ANSWERED", answeredAt: new Date() },
       update: { valueNumeric: value, unit, dataQuality, status: "ANSWERED", answeredAt: new Date() },
     });
     await recordAudit(tx, {
       organizationId: org.id,
       actorUserId: membership.user.id,
       action: "RESTATE",
-      entityType: "Answer",
-      entityId: answer.id,
-      before: beforeAnswer,
-      after: answer,
+      entityType: "PositionValue",
+      entityId: positionValue.id,
+      before: beforePositionValue,
+      after: positionValue,
     });
 
     const binding = question.binding;
@@ -216,12 +247,12 @@ export async function decideRestatementAction(restatementId: string, decision: "
       periodEnd: assignment.period.endsOn,
     });
 
-    const beforeActivity = await tx.activityRecord.findFirst({ where: { answerId: answer.id } });
+    const beforeActivity = await tx.activityRecord.findFirst({ where: { positionValueId: positionValue.id } });
     const activityData = {
       organizationId: org.id,
       siteId: assignment.siteId,
       reportingPeriodId: assignment.reportingPeriodId,
-      answerId: answer.id,
+      positionValueId: positionValue.id,
       ...projected,
       status: "SUBMITTED" as const,
     };

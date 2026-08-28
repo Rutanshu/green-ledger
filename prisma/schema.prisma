@@ -966,6 +966,11 @@ model ActivityRecord {
   reportingPeriodId  String       @map("reporting_period_id")
   siteAssetId        String?      @map("site_asset_id")
   answerId           String?      @map("answer_id")
+  /// Step 2.2 Phase C: the value that produced this accounting record, in
+  /// the new store. answerId stays for historical records created before
+  /// the cutover — never both set on one row. See CLAUDE.md rule 11: a
+  /// PositionValue is what a human typed, this is the accounting record.
+  positionValueId    String?      @map("position_value_id")
   scope              Scope
   scope3Category     Int?         @map("scope3_category")
   activityType       ActivityType @map("activity_type")
@@ -992,6 +997,7 @@ model ActivityRecord {
   period          ReportingPeriod  @relation(fields: [reportingPeriodId], references: [id], onDelete: Cascade)
   siteAsset       SiteAsset?       @relation(fields: [siteAssetId], references: [id])
   answer          Answer?          @relation(fields: [answerId], references: [id])
+  positionValue   PositionValue?   @relation(fields: [positionValueId], references: [id])
   importBatch     ImportBatch?     @relation(fields: [importBatchId], references: [id])
   emissionRecords EmissionRecord[]
 
@@ -1277,7 +1283,7 @@ model ImportRow {
   beforeValue       Decimal?        @map("before_value") @db.Decimal(20, 6)
   beforeUnit        UnitCode?       @map("before_unit")
   beforeDataQuality DataQuality?    @map("before_data_quality")
-  answerId          String?         @map("answer_id")
+  positionValueId   String?         @map("position_value_id")
 
   importBatch ImportBatch @relation(fields: [importBatchId], references: [id], onDelete: Cascade)
 
@@ -1434,9 +1440,10 @@ model PositionValue {
   priorPeriodValue  Decimal?     @map("prior_period_value") @db.Decimal(20, 6)
   updatedAt         DateTime     @updatedAt @map("updated_at")
 
-  position Position        @relation(fields: [positionId], references: [id], onDelete: Cascade)
-  site     Site            @relation(fields: [siteId], references: [id], onDelete: Cascade)
-  period   ReportingPeriod @relation(fields: [reportingPeriodId], references: [id], onDelete: Cascade)
+  position        Position         @relation(fields: [positionId], references: [id], onDelete: Cascade)
+  site            Site             @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  period          ReportingPeriod  @relation(fields: [reportingPeriodId], references: [id], onDelete: Cascade)
+  activityRecords ActivityRecord[]
 
   @@unique([positionId, siteId, reportingPeriodId, line], map: "position_values_unique_line")
   @@map("position_values")

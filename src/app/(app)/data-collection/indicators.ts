@@ -20,8 +20,7 @@ export interface IndicatorQuestionLike {
   formula: string | null;
 }
 
-export interface AnswerLike {
-  questionId: string;
+export interface PositionValueLike {
   valueNumeric: Decimal | string | number | null;
 }
 
@@ -57,17 +56,21 @@ function buildSiteAttributes(site: SiteAttributeSource): Record<string, Decimal 
  * the referenced one's already-computed value rather than UPSTREAM_MISSING.
  * Formulas were parsed/cycle-checked/dimension-checked at save time
  * (builder/actions.ts) — a parse failure here is defensive only.
+ *
+ * Step 2.2 Phase C: sibling values are looked up by position code (matching
+ * Question.code) rather than by questionId — they now live in
+ * PositionValue, keyed by site+period, not on the assignment.
  */
 export function evaluateIndicators(
   allQuestions: readonly IndicatorQuestionLike[],
-  answersByQuestion: ReadonlyMap<string, AnswerLike>,
+  valueByQuestionCode: (code: string) => PositionValueLike | undefined,
   site: SiteAttributeSource,
 ): ReadonlyMap<string, EvalResult> {
   const positionValues: Record<string, Decimal | null> = {};
   for (const q of allQuestions) {
     if (q.inputType === "INDICATOR") continue;
-    const a = answersByQuestion.get(q.id);
-    positionValues[q.code] = a ? toDecimalOrNull(a.valueNumeric) : null;
+    const v = valueByQuestionCode(q.code);
+    positionValues[q.code] = v ? toDecimalOrNull(v.valueNumeric) : null;
   }
   const siteAttributes = buildSiteAttributes(site);
 

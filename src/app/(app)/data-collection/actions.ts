@@ -90,6 +90,27 @@ export async function submitAnswer(_prev: SubmitAnswerState, formData: FormData)
     throw e;
   }
 
+  // Step 2.2 Phase C: Question stays the authoring/shape source (label,
+  // section, ordering, visibility) — nothing about that changes. The VALUE
+  // now lives in Position/PositionValue, keyed by (site, period) rather
+  // than (assignment, question), matching BUILD_PLAN's "a position appears
+  // in any number of questionnaires and is one storage slot." A question
+  // authored before this cutover has no Position yet; create one lazily,
+  // matching the same code/type/dimension mapping the one-off migration
+  // script used, so a brand-new question works without a separate backfill.
+  const position = await db.position.upsert({
+    where: { organizationId_positionCode: { organizationId: org.id, positionCode: question.code } },
+    create: {
+      organizationId: org.id,
+      positionCode: question.code,
+      labelKey: question.label,
+      type: question.inputType === "INDICATOR" ? "INDICATOR" : "FLOW",
+      dimension: question.unitDimension,
+      allowedUnits: question.allowedUnits,
+    },
+    update: {},
+  });
+
   // Reference data for calculation — read-only, fetched before the
   // transaction so the transaction body is just writes.
   const binding = question.binding;
@@ -134,21 +155,22 @@ export async function submitAnswer(_prev: SubmitAnswerState, formData: FormData)
   const result = await rawPrisma.$transaction(async (tx) => {
     await tx.$executeRawUnsafe(`SET LOCAL app.org_id = '${escapedOrgId}'`);
 
-    const beforeAnswer = await tx.answer.findUnique({ where: { assignmentId_questionId: { assignmentId, questionId } } });
-    assertFreshWrite(expectedUpdatedAt || null, beforeAnswer?.updatedAt.toISOString() ?? null);
-    const answer = await tx.answer.upsert({
-      where: { assignmentId_questionId: { assignmentId, questionId } },
-      create: { assignmentId, questionId, valueNumeric: value, unit: unit as never, dataQuality: dataQuality as never, comment: comment || null, status: "ANSWERED", answeredAt: new Date() },
+    const positionValueKey = { positionId_siteId_reportingPeriodId_line: { positionId: position.id, siteId: assignment.siteId, reportingPeriodId: assignment.reportingPeriodId, line: 1 } } as const;
+    const beforePositionValue = await tx.positionValue.findUnique({ where: positionValueKey });
+    assertFreshWrite(expectedUpdatedAt || null, beforePositionValue?.updatedAt.toISOString() ?? null);
+    const positionValue = await tx.positionValue.upsert({
+      where: positionValueKey,
+      create: { positionId: position.id, siteId: assignment.siteId, reportingPeriodId: assignment.reportingPeriodId, line: 1, valueNumeric: value, unit: unit as never, dataQuality: dataQuality as never, comment: comment || null, status: "ANSWERED", answeredAt: new Date() },
       update: { valueNumeric: value, unit: unit as never, dataQuality: dataQuality as never, comment: comment || null, status: "ANSWERED", answeredAt: new Date() },
     });
     await recordAudit(tx, {
       organizationId: org.id,
       actorUserId: membership.user.id,
-      action: beforeAnswer ? "UPDATE" : "CREATE",
-      entityType: "Answer",
-      entityId: answer.id,
-      before: beforeAnswer,
-      after: answer,
+      action: beforePositionValue ? "UPDATE" : "CREATE",
+      entityType: "PositionValue",
+      entityId: positionValue.id,
+      before: beforePositionValue,
+      after: positionValue,
     });
 
     let calcWarning: string | undefined;
@@ -162,12 +184,12 @@ export async function submitAnswer(_prev: SubmitAnswerState, formData: FormData)
         periodEnd: period.endsOn,
       });
 
-      const beforeActivity = await tx.activityRecord.findFirst({ where: { answerId: answer.id } });
+      const beforeActivity = await tx.activityRecord.findFirst({ where: { positionValueId: positionValue.id } });
       const activityData = {
         organizationId: org.id,
         siteId: assignment.siteId,
         reportingPeriodId: assignment.reportingPeriodId,
-        answerId: answer.id,
+        positionValueId: positionValue.id,
         ...projected,
         status: "SUBMITTED" as const,
       };
@@ -266,13 +288,26 @@ export async function submitAnswer(_prev: SubmitAnswerState, formData: FormData)
     }
 
     // Completeness, recomputed in the same transaction so the assignment
-    // status never reflects a half-saved answer.
-    const freshAssignment = await tx.questionnaireAssignment.findUniqueOrThrow({
-      where: { id: assignmentId },
-      include: { answers: true },
-    });
+    // status never reflects a half-saved value. Sourced from PositionValue
+    // now, scoped to this template's questions by matching position code
+    // — one fetch, reused below for the rule context too.
+    const freshAssignment = await tx.questionnaireAssignment.findUniqueOrThrow({ where: { id: assignmentId } });
     const questions = assignment.template.sections.flatMap((s) => s.questions);
-    const satisfied = new Set(freshAssignment.answers.map((a) => a.questionId));
+    const questionIdByPositionCode = new Map(questions.map((q) => [q.code, q.id]));
+    const siblingValues = await tx.positionValue.findMany({
+      where: {
+        siteId: assignment.siteId,
+        reportingPeriodId: assignment.reportingPeriodId,
+        position: { organizationId: org.id, positionCode: { in: questions.map((q) => q.code) } },
+      },
+      include: { position: true },
+    });
+    const satisfied = new Set(
+      siblingValues
+        .filter((v) => v.status === "ANSWERED")
+        .map((v) => questionIdByPositionCode.get(v.position.positionCode))
+        .filter((id): id is string => !!id),
+    );
     const completeness = computeCompleteness(
       { questions: questions.map((q) => ({ code: q.id, isRequired: q.isRequired, visibleIf: q.visibleIf as VisibilityRule | null })), satisfied },
       {
@@ -308,23 +343,21 @@ export async function submitAnswer(_prev: SubmitAnswerState, formData: FormData)
     // transaction (the answer, the recalculation, the completeness update)
     // — a rule never lets half of a rejected write land. A WARN violation
     // is recorded as an open RuleViolation instead, same transaction.
-    const codeById = new Map(questions.map((q) => [q.id, q.code]));
-    const positionValues: Record<string, string | null> = {};
+    const positionValuesByCode: Record<string, string | null> = {};
     const priorPeriodValues: Record<string, string | null> = {};
     const dataQualities: Record<string, string | null> = {};
     const attachmentCounts: Record<string, number> = {};
     const comments: Record<string, string | null> = {};
-    for (const a of freshAssignment.answers) {
-      const code = codeById.get(a.questionId);
-      if (!code) continue;
-      positionValues[code] = a.valueNumeric?.toString() ?? null;
-      priorPeriodValues[code] = a.priorPeriodValue?.toString() ?? null;
-      dataQualities[code] = a.dataQuality ?? null;
-      attachmentCounts[code] = a.documentIds.length;
-      comments[code] = a.comment;
+    for (const v of siblingValues) {
+      const code = v.position.positionCode;
+      positionValuesByCode[code] = v.valueNumeric?.toString() ?? null;
+      priorPeriodValues[code] = v.priorPeriodValue?.toString() ?? null;
+      dataQualities[code] = v.dataQuality ?? null;
+      attachmentCounts[code] = v.documentIds.length;
+      comments[code] = v.comment;
     }
     const ruleCtx: RuleEvalContext = {
-      positionValues,
+      positionValues: positionValuesByCode,
       priorPeriodValues,
       dataQualities: dataQualities as RuleEvalContext["dataQualities"],
       attachmentCounts,

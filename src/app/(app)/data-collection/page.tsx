@@ -25,13 +25,22 @@ export default async function DataCollectionPage() {
     include: {
       assignments: {
         include: {
-          answers: { include: { question: true, activityRecords: { include: { emissionRecords: true } } } },
           template: { include: { sections: { include: { questions: true } } } },
           period: true,
         },
       },
     },
   });
+
+  // Step 2.2 Phase C: values now live in PositionValue, keyed by (site,
+  // period), not on the assignment — one batched fetch for every site
+  // rendered on this page, looked up per question by matching position
+  // code below.
+  const positionValues = await db.positionValue.findMany({
+    where: { siteId: { in: sites.map((s) => s.id) } },
+    include: { position: true, activityRecords: { include: { emissionRecords: true } } },
+  });
+  const valueByKey = new Map(positionValues.map((v) => [`${v.siteId}:${v.reportingPeriodId}:${v.position.positionCode}`, v]));
 
   const ruleViolations = await db.ruleViolation.findMany({
     where: { assignmentId: { in: sites.flatMap((s) => s.assignments.map((a) => a.id)) } },
@@ -62,11 +71,12 @@ export default async function DataCollectionPage() {
         {sites.map((site) => {
           const assignment = site.assignments[0];
           const allQuestions = assignment?.template.sections.flatMap((s) => s.questions) ?? [];
-          const answersByQuestion = new Map(assignment?.answers.map((a) => [a.questionId, a]) ?? []);
+          const valueByQuestionCode = (code: string) =>
+            assignment ? valueByKey.get(`${site.id}:${assignment.reportingPeriodId}:${code}`) : undefined;
           const numericQuestions = allQuestions.filter((q) => q.allowedUnits.length > 0);
           const indicatorQuestions = allQuestions.filter((q) => q.inputType === "INDICATOR");
           const otherQuestions = allQuestions.filter((q) => q.allowedUnits.length === 0 && q.inputType !== "INDICATOR");
-          const indicatorResults = evaluateIndicators(allQuestions, answersByQuestion, site);
+          const indicatorResults = evaluateIndicators(allQuestions, valueByQuestionCode, site);
 
           return (
             <div key={site.id} className="rounded-[11px] glass">
@@ -105,8 +115,8 @@ export default async function DataCollectionPage() {
                     </thead>
                     <tbody>
                       {numericQuestions.map((q) => {
-                        const a = answersByQuestion.get(q.id);
-                        const emissionRecords = a?.activityRecords.flatMap((ar) => ar.emissionRecords) ?? [];
+                        const v = valueByQuestionCode(q.code);
+                        const emissionRecords = v?.activityRecords.flatMap((ar) => ar.emissionRecords) ?? [];
                         const totalKg = emissionRecords.reduce((sum, r) => sum + Number(r.emissionsKgCo2e), 0);
                         return (
                           <AnswerRow
@@ -115,7 +125,7 @@ export default async function DataCollectionPage() {
                             questionId={q.id}
                             code={q.code}
                             allowedUnits={q.allowedUnits}
-                            existing={a ? { value: a.valueNumeric?.toString() ?? "", unit: a.unit ?? "", quality: a.dataQuality ?? "ESTIMATED", updatedAt: a.updatedAt.toISOString(), comment: a.comment ?? "" } : null}
+                            existing={v ? { value: v.valueNumeric?.toString() ?? "", unit: v.unit ?? "", quality: v.dataQuality ?? "ESTIMATED", updatedAt: v.updatedAt.toISOString(), comment: v.comment ?? "" } : null}
                             existingEmissionsKg={emissionRecords.length > 0 ? totalKg.toString() : null}
                             canEdit={canEdit}
                             labelOverrides={labelOverrides}

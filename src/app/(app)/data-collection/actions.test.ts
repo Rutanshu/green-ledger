@@ -4,6 +4,11 @@
  * entirely, which is the framework's concern, not this app's. Mocks only
  * the session (cookies) and Next's revalidation cache, both of which
  * require a real request scope this test doesn't have.
+ *
+ * Step 2.2 Phase C: submitAnswer now writes PositionValue (keyed by
+ * site+period), not Answer — every fixture/assertion here reads that
+ * store. Question stays the shape/authoring source (code, label, section),
+ * unchanged.
  */
 import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
 import { adminPrisma as rawPrisma } from '@/lib/db/admin-client';
@@ -13,12 +18,15 @@ let sessionOrgId: string;
 let sessionUserId: string;
 let otherOrgId: string;
 let assignmentId: string;
+let siteId: string;
 let questionId: string;
+let dieselPositionId: string;
 let originalValue: string | null;
 let originalUnit: string | null;
 let periodId: string;
 let originalPeriodStatus: string;
 let cleaningSpendQuestionId: string;
+let cleaningSpendPositionId: string;
 let readOnlyUserId: string;
 
 vi.mock('next/headers', () => ({
@@ -34,6 +42,10 @@ vi.mock('next/cache', () => ({ revalidatePath: () => {} }));
 vi.mock('next/navigation', () => ({ redirect: () => {} }));
 
 const { submitAnswer } = await import('./actions');
+
+function positionValueKey(positionId: string) {
+  return { positionId_siteId_reportingPeriodId_line: { positionId, siteId, reportingPeriodId: periodId, line: 1 } } as const;
+}
 
 beforeAll(async () => {
   const org = await rawPrisma.organization.findFirstOrThrow({ where: { legalName: 'Meridian Industries (Demo)' } });
@@ -52,6 +64,7 @@ beforeAll(async () => {
   await rawPrisma.membership.create({ data: { userId: sessionUserId, organizationId: otherOrgId, role: 'SUPER_ADMIN' } });
 
   const site = await rawPrisma.site.findFirstOrThrow({ where: { organizationId: orgId, code: 'MI-NG-01' } });
+  siteId = site.id;
   const assignment = await rawPrisma.questionnaireAssignment.findFirstOrThrow({ where: { siteId: site.id } });
   assignmentId = assignment.id;
   periodId = assignment.reportingPeriodId;
@@ -61,41 +74,48 @@ beforeAll(async () => {
 
   const question = await rawPrisma.question.findFirstOrThrow({ where: { code: 'diesel_qty' } });
   questionId = question.id;
+  const dieselPosition = await rawPrisma.position.findFirstOrThrow({ where: { organizationId: orgId, positionCode: 'diesel_qty' } });
+  dieselPositionId = dieselPosition.id;
 
   const cleaningSpend = await rawPrisma.question.findFirstOrThrow({ where: { code: 'cleaning_spend' } });
   cleaningSpendQuestionId = cleaningSpend.id;
+  const cleaningSpendPosition = await rawPrisma.position.upsert({
+    where: { organizationId_positionCode: { organizationId: orgId, positionCode: 'cleaning_spend' } },
+    create: { organizationId: orgId, positionCode: 'cleaning_spend', labelKey: cleaningSpend.label, type: 'FLOW', dimension: cleaningSpend.unitDimension, allowedUnits: cleaningSpend.allowedUnits },
+    update: {},
+  });
+  cleaningSpendPositionId = cleaningSpendPosition.id;
 
-  const existing = await rawPrisma.answer.findFirst({ where: { assignmentId, questionId } });
+  const existing = await rawPrisma.positionValue.findUnique({ where: positionValueKey(dieselPositionId) });
   originalValue = existing?.valueNumeric?.toString() ?? null;
   originalUnit = existing?.unit ?? null;
-});
+}, 30000);
 
 afterAll(async () => {
   // restore whatever was there before this test ran, and remove the
   // ActivityRecord/EmissionRecord these tests generated — otherwise the
-  // Answer reverts but its calculated lineage stays pointed at test data,
-  // which is exactly the kind of drift this product exists to prevent.
-  const testActivity = await rawPrisma.activityRecord.findFirst({
-    where: { answer: { assignmentId, questionId } },
-  });
+  // PositionValue reverts but its calculated lineage stays pointed at test
+  // data, which is exactly the kind of drift this product exists to prevent.
+  const testActivity = await rawPrisma.activityRecord.findFirst({ where: { positionValueId: (await rawPrisma.positionValue.findUnique({ where: positionValueKey(dieselPositionId) }))?.id } });
   if (testActivity) await rawPrisma.activityRecord.delete({ where: { id: testActivity.id } });
 
-  const cleaningActivity = await rawPrisma.activityRecord.findFirst({
-    where: { answer: { assignmentId, questionId: cleaningSpendQuestionId } },
-  });
-  if (cleaningActivity) await rawPrisma.activityRecord.delete({ where: { id: cleaningActivity.id } });
-  await rawPrisma.answer.deleteMany({ where: { assignmentId, questionId: cleaningSpendQuestionId } });
+  const cleaningSpendValue = await rawPrisma.positionValue.findUnique({ where: positionValueKey(cleaningSpendPositionId) });
+  if (cleaningSpendValue) {
+    const cleaningActivity = await rawPrisma.activityRecord.findFirst({ where: { positionValueId: cleaningSpendValue.id } });
+    if (cleaningActivity) await rawPrisma.activityRecord.delete({ where: { id: cleaningActivity.id } });
+    await rawPrisma.positionValue.delete({ where: { id: cleaningSpendValue.id } });
+  }
 
   if (originalValue !== null && originalUnit !== null) {
-    await rawPrisma.answer.update({
-      where: { assignmentId_questionId: { assignmentId, questionId } },
+    await rawPrisma.positionValue.update({
+      where: positionValueKey(dieselPositionId),
       data: { valueNumeric: originalValue, unit: originalUnit as never },
     });
   }
   await rawPrisma.reportingPeriod.update({ where: { id: periodId }, data: { status: originalPeriodStatus as never } });
   await rawPrisma.organization.delete({ where: { id: otherOrgId } });
   await rawPrisma.$disconnect();
-});
+}, 30000);
 
 function fd(fields: Record<string, string>) {
   const f = new FormData();
@@ -122,35 +142,35 @@ describe('submitAnswer', () => {
   });
 
   it('accepts a valid submission and actually writes it to the database', async () => {
-    const before = await rawPrisma.answer.findUnique({ where: { assignmentId_questionId: { assignmentId, questionId } } });
+    const before = await rawPrisma.positionValue.findUnique({ where: positionValueKey(dieselPositionId) });
     const result = await submitAnswer(null, fd({ assignmentId, questionId, value: '15000', unit: 'L', dataQuality: 'MEASURED', expectedUpdatedAt: before?.updatedAt.toISOString() ?? '' }));
     expect(result?.ok).toBe(true);
 
-    const row = await rawPrisma.answer.findUnique({ where: { assignmentId_questionId: { assignmentId, questionId } } });
+    const row = await rawPrisma.positionValue.findUnique({ where: positionValueKey(dieselPositionId) });
     expect(row?.valueNumeric?.toString()).toBe('15000');
     expect(row?.unit).toBe('L');
   });
 
   it('persists a comment (Step 3.4 — needed for MANDATORY_COMMENT rules to read anything real)', async () => {
-    const before = await rawPrisma.answer.findUnique({ where: { assignmentId_questionId: { assignmentId, questionId } } });
+    const before = await rawPrisma.positionValue.findUnique({ where: positionValueKey(dieselPositionId) });
     const result = await submitAnswer(null, fd({
       assignmentId, questionId, value: '15000', unit: 'L', dataQuality: 'MEASURED',
       expectedUpdatedAt: before?.updatedAt.toISOString() ?? '', comment: 'Per corrected invoice #4471',
     }));
     expect(result?.ok).toBe(true);
 
-    const row = await rawPrisma.answer.findUnique({ where: { assignmentId_questionId: { assignmentId, questionId } } });
+    const row = await rawPrisma.positionValue.findUnique({ where: positionValueKey(dieselPositionId) });
     expect(row?.comment).toBe('Per corrected invoice #4471');
   });
 
   it('rejects a write carrying a stale expectedUpdatedAt (BUILD_PLAN Step 3.2 acceptance criterion)', async () => {
-    const before = await rawPrisma.answer.findUniqueOrThrow({ where: { assignmentId_questionId: { assignmentId, questionId } } });
+    const before = await rawPrisma.positionValue.findUniqueOrThrow({ where: positionValueKey(dieselPositionId) });
     const staleToken = new Date(before.updatedAt.getTime() - 60_000).toISOString(); // pretend the form loaded a minute before the real last write
     const result = await submitAnswer(null, fd({ assignmentId, questionId, value: '7777', unit: 'L', dataQuality: 'MEASURED', expectedUpdatedAt: staleToken }));
     expect(result?.ok).toBe(false);
     expect(result?.error).toMatch(/changed by someone else/i);
 
-    const row = await rawPrisma.answer.findUnique({ where: { assignmentId_questionId: { assignmentId, questionId } } });
+    const row = await rawPrisma.positionValue.findUnique({ where: positionValueKey(dieselPositionId) });
     expect(row?.valueNumeric?.toString()).not.toBe('7777');
   });
 
@@ -173,7 +193,7 @@ describe('submitAnswer', () => {
       expect(result?.error).toMatch(/read only/i);
 
       // and confirms nothing was written
-      const row = await rawPrisma.answer.findUnique({ where: { assignmentId_questionId: { assignmentId, questionId } } });
+      const row = await rawPrisma.positionValue.findUnique({ where: positionValueKey(dieselPositionId) });
       expect(row?.valueNumeric?.toString()).not.toBe('1');
     } finally {
       sessionUserId = (await rawPrisma.membership.findFirstOrThrow({ where: { organizationId: orgId, role: 'SUPER_ADMIN' } })).userId;
@@ -191,7 +211,7 @@ describe('submitAnswer', () => {
   });
 
   it('actually calculates emissions — 15000 L diesel at the real DEFRA factor, not a guess', async () => {
-    const before = await rawPrisma.answer.findUnique({ where: { assignmentId_questionId: { assignmentId, questionId } } });
+    const before = await rawPrisma.positionValue.findUnique({ where: positionValueKey(dieselPositionId) });
     const result = await submitAnswer(null, fd({ assignmentId, questionId, value: '15000', unit: 'L', dataQuality: 'MEASURED', expectedUpdatedAt: before?.updatedAt.toISOString() ?? '' }));
     expect(result?.ok).toBe(true);
 
@@ -200,7 +220,8 @@ describe('submitAnswer', () => {
     // discount, multiplier 1 — so this must be exact, not approximate.
     expect(result?.emissionsKgCo2e).toBe('40200.000');
 
-    const activity = await rawPrisma.activityRecord.findFirstOrThrow({ where: { answer: { assignmentId, questionId } } });
+    const positionValue = await rawPrisma.positionValue.findUniqueOrThrow({ where: positionValueKey(dieselPositionId) });
+    const activity = await rawPrisma.activityRecord.findFirstOrThrow({ where: { positionValueId: positionValue.id } });
     expect(activity.quantity.toString()).toBe('15000'); // raw reported value, not multiplier-scaled
     expect(activity.fuelOrMaterialCode).toBe('diesel');
 
@@ -212,7 +233,7 @@ describe('submitAnswer', () => {
     expect(records[0].factorSource).toContain('Fuels, Table 5');
 
     const events = await rawPrisma.auditEvent.findMany({
-      where: { entityType: { in: ['Answer', 'ActivityRecord', 'EmissionRecord'] }, entityId: { in: [activity.id, records[0].id, activity.answerId ?? ''] } },
+      where: { entityType: { in: ['PositionValue', 'ActivityRecord', 'EmissionRecord'] }, entityId: { in: [activity.id, records[0].id, activity.positionValueId ?? ''] } },
       orderBy: { occurredAt: 'desc' },
     });
     expect(events.some((e) => e.entityType === 'ActivityRecord')).toBe(true);
@@ -229,7 +250,8 @@ describe('submitAnswer', () => {
     expect(result?.emissionsKgCo2e).toBeUndefined(); // but nothing was calculated
     expect(result?.calcWarning).toBeTruthy();
 
-    const activity = await rawPrisma.activityRecord.findFirst({ where: { answer: { assignmentId, questionId: cleaningSpendQuestionId } } });
+    const cleaningSpendValue = await rawPrisma.positionValue.findUniqueOrThrow({ where: positionValueKey(cleaningSpendPositionId) });
+    const activity = await rawPrisma.activityRecord.findFirst({ where: { positionValueId: cleaningSpendValue.id } });
     expect(activity).not.toBeNull();
 
     const records = await rawPrisma.emissionRecord.findMany({ where: { activityRecordId: activity!.id } });
