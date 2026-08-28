@@ -1,5 +1,7 @@
 import { getCurrentMembership } from "@/lib/demo-org";
 import { can } from "@/lib/auth/permissions";
+import { getAuditFooter } from "@/lib/audit/footer";
+import { AuditFooter } from "@/components/AuditFooter";
 import { Denied } from "../_components/Denied";
 import { OrganisationForm } from "./OrganisationForm";
 
@@ -19,6 +21,7 @@ export default async function OrganisationPage() {
   if (!membership) return null;
   if (!can(membership.role, "manage_org")) return <Denied role={membership.role} />;
   const org = membership.org;
+  const audit = await getAuditFooter(org.id, "Organization", org.id);
 
   return (
     <>
@@ -40,6 +43,12 @@ export default async function OrganisationPage() {
       <div className="mt-3 max-w-lg rounded-[11px] glass">
         <Row label="Default GWP set" value={org.defaultGwpSetId ?? "—"} />
       </div>
+
+      {audit && (
+        <div className="max-w-lg">
+          <AuditFooter data={audit} historyHref="/audit-log" />
+        </div>
+      )}
     </>
   );
 }

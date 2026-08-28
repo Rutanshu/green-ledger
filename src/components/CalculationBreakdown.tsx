@@ -4,6 +4,7 @@
  * here; every number is formatted, not computed.
  */
 import { labelText } from "./Label";
+import { CalculatedFooter } from "./CalculatedFooter";
 import type { LabelOverride } from "@/lib/labels";
 
 export interface EmissionRecordSummary {
@@ -18,6 +19,7 @@ export interface EmissionRecordSummary {
   gwpSet: string;
   emissionsKgCo2e: string;
   calcEngineVersion: string;
+  calculatedAt: string;
 }
 
 export function CalculationBreakdown({
@@ -49,6 +51,11 @@ export function CalculationBreakdown({
       <div className="mt-2.5 text-[12px] text-ink2">
         Factor: {record.factorSource} · version {record.factorVersion} · warming-potential standard {record.gwpSet}
       </div>
+      <CalculatedFooter
+        calculatedAt={record.calculatedAt}
+        engineVersion={record.calcEngineVersion}
+        detail={`${record.quantityNormalised} ${record.unitNormalised} × ${record.factorValue} × ${record.gwpValue} GWP`}
+      />
     </div>
   );
 }

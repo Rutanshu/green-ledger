@@ -55,6 +55,7 @@ export type SubmitAnswerState = {
     gwpSet: string;
     emissionsKgCo2e: string;
     calcEngineVersion: string;
+    calculatedAt: string;
   };
 } | null;
 
@@ -470,6 +471,10 @@ export async function submitAnswer(_prev: SubmitAnswerState, formData: FormData)
           gwpSet: primary.gwpSet,
           emissionsKgCo2e: primary.emissionsKgCo2e.toFixed(3),
           calcEngineVersion: primary.calcEngineVersion,
+          // The transaction that just created this record committed
+          // moments ago — accurate enough for display, and this is the
+          // action layer formatting a response, not lib/calc/ itself.
+          calculatedAt: new Date().toISOString(),
         }
       : undefined,
   };

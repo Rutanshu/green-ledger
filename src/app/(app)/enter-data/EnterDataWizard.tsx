@@ -5,6 +5,7 @@ import Link from "next/link";
 import { submitAnswer } from "../data-collection/actions";
 import { labelText } from "@/components/Label";
 import { CalculationBreakdown } from "@/components/CalculationBreakdown";
+import { GuidanceBanner } from "@/components/GuidanceBanner";
 import { formatQuestionLabel } from "@/lib/labels/formatQuestionLabel";
 import type { LabelOverride } from "@/lib/labels";
 
@@ -237,7 +238,7 @@ export function EnterDataWizard({ sites, labelOverrides }: { sites: WizardSite[]
       {stepIndex === 3 && site && question && (
         <div className="flex flex-col gap-3">
           <div className="text-[15px] font-medium">{formatQuestionLabel(question.label, site.periodLabel)}</div>
-          {question.helpText && <p className="text-[13px] text-ink2">{question.helpText}</p>}
+          {question.helpText && <GuidanceBanner>{question.helpText}</GuidanceBanner>}
           <input
             value={value}
             onChange={(e) => setValue(e.target.value)}

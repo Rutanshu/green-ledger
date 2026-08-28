@@ -134,6 +134,7 @@ export default async function ReviewPage() {
                               gwpSet: primary.gwpSet,
                               emissionsKgCo2e: primary.emissionsKgCo2e.toString(),
                               calcEngineVersion: primary.calcEngineVersion,
+                              calculatedAt: primary.calculatedAt.toISOString(),
                             }}
                             labelOverrides={labelOverrides}
                           />
