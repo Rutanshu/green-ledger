@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { RegTimeline } from "../login/RegTimeline";
 import { ReadinessQuestionnaire } from "./ReadinessQuestionnaire";
+import { Header } from "@/components/site/Header";
+import { Footer } from "@/components/site/Footer";
 
 const PROCESS_STEPS = [
   { n: 1, title: "Set up your company", body: "Base year, consolidation approach, fiscal calendar — the decisions every later number depends on." },
@@ -59,15 +61,7 @@ const STRUCTURE = [
 export default function UnderstandPage() {
   return (
     <div className="relative min-h-screen overflow-x-hidden">
-      <header className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-6 pt-8 text-[15px] font-semibold sm:px-10">
-        <Link href="/home" className="flex items-center gap-2">
-          <span className="grid h-[22px] w-[22px] place-items-center rounded-md bg-accent text-xs font-bold text-white">G</span>
-          Green Ledger
-        </Link>
-        <Link href="/login" className="rounded-lg border border-border bg-surface px-3.5 py-1.5 text-[13px] font-medium hover:bg-track">
-          Sign in
-        </Link>
-      </header>
+      <Header />
 
       <main className="mx-auto max-w-4xl px-6 py-12 sm:px-10 lg:py-16">
         {/* ---------- A: what this is ---------- */}
@@ -194,6 +188,8 @@ export default function UnderstandPage() {
           </div>
         </section>
       </main>
+
+      <Footer />
     </div>
   );
 }

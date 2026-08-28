@@ -2,6 +2,8 @@ import Link from "next/link";
 import { quickLogin } from "./actions";
 import { SignInForm } from "./SignInForm";
 import { ROLE_LABEL, type Role } from "@/lib/auth/permissions";
+import { Header } from "@/components/site/Header";
+import { Footer } from "@/components/site/Footer";
 
 const DEMO_ACCOUNTS: Array<{ role: Role; email: string; can: string }> = [
   { role: "SUPER_ADMIN", email: "super.admin@greenledger.demo", can: "Everything, including Organisation and Users & roles" },
@@ -32,14 +34,7 @@ const PILLARS = [
 export default function LoginPage() {
   return (
     <div className="relative min-h-screen overflow-x-hidden">
-      <header className="mx-auto flex max-w-6xl items-center gap-2 px-6 pt-8 text-[15px] font-semibold sm:px-10">
-        <Link href="/home" className="flex items-center gap-2">
-          <span className="grid h-[22px] w-[22px] place-items-center rounded-md bg-accent text-xs font-bold text-white">
-            G
-          </span>
-          Green Ledger
-        </Link>
-      </header>
+      <Header />
 
       <main className="mx-auto grid max-w-6xl grid-cols-1 gap-14 px-6 py-12 sm:px-10 lg:grid-cols-[1.15fr_0.85fr] lg:items-start lg:py-16">
         {/* ---------- editorial column ---------- */}
@@ -126,6 +121,8 @@ export default function LoginPage() {
           </div>
         </div>
       </main>
+
+      <Footer />
     </div>
   );
 }

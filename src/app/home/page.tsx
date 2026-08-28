@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { Header } from "@/components/site/Header";
+import { Footer } from "@/components/site/Footer";
 
 const PILLARS = [
   { n: "01", title: "Enter it once", body: "A fuel bill, a meter reading — walked through one step at a time, not a spreadsheet to fill in blind." },
@@ -15,20 +17,7 @@ const AUDIENCES = [
 export default function HomePage() {
   return (
     <div className="relative min-h-screen overflow-x-hidden">
-      <header className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-6 pt-8 text-[15px] font-semibold sm:px-10">
-        <div className="flex items-center gap-2">
-          <span className="grid h-[22px] w-[22px] place-items-center rounded-md bg-accent text-xs font-bold text-white">G</span>
-          Green Ledger
-        </div>
-        <div className="flex items-center gap-2">
-          <Link href="/understand" className="hidden rounded-lg px-3.5 py-1.5 text-[13px] font-medium text-ink2 hover:bg-track sm:inline-block">
-            Understand your reporting
-          </Link>
-          <Link href="/login" className="rounded-lg border border-border bg-surface px-3.5 py-1.5 text-[13px] font-medium hover:bg-track">
-            Sign in
-          </Link>
-        </div>
-      </header>
+      <Header />
 
       {/* ---------- hero ---------- */}
       <main className="mx-auto max-w-6xl px-6 pb-20 pt-16 sm:px-10 lg:pt-24">
@@ -80,6 +69,8 @@ export default function HomePage() {
           </div>
         </div>
       </main>
+
+      <Footer />
     </div>
   );
 }
