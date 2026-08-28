@@ -33,10 +33,12 @@ export default function LoginPage() {
   return (
     <div className="relative min-h-screen overflow-x-hidden">
       <header className="mx-auto flex max-w-6xl items-center gap-2 px-6 pt-8 text-[15px] font-semibold sm:px-10">
-        <span className="grid h-[22px] w-[22px] place-items-center rounded-md bg-accent text-xs font-bold text-white">
-          G
-        </span>
-        Green Ledger
+        <Link href="/home" className="flex items-center gap-2">
+          <span className="grid h-[22px] w-[22px] place-items-center rounded-md bg-accent text-xs font-bold text-white">
+            G
+          </span>
+          Green Ledger
+        </Link>
       </header>
 
       <main className="mx-auto grid max-w-6xl grid-cols-1 gap-14 px-6 py-12 sm:px-10 lg:grid-cols-[1.15fr_0.85fr] lg:items-start lg:py-16">

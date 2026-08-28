@@ -60,10 +60,10 @@ export default function UnderstandPage() {
   return (
     <div className="relative min-h-screen overflow-x-hidden">
       <header className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-6 pt-8 text-[15px] font-semibold sm:px-10">
-        <div className="flex items-center gap-2">
+        <Link href="/home" className="flex items-center gap-2">
           <span className="grid h-[22px] w-[22px] place-items-center rounded-md bg-accent text-xs font-bold text-white">G</span>
           Green Ledger
-        </div>
+        </Link>
         <Link href="/login" className="rounded-lg border border-border bg-surface px-3.5 py-1.5 text-[13px] font-medium hover:bg-track">
           Sign in
         </Link>
@@ -82,7 +82,18 @@ export default function UnderstandPage() {
             number kept, so an auditor can recompute it by hand.
           </p>
 
-          <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <Link
+            href="/understand/scopes"
+            className="glass-strong mt-8 flex items-center justify-between gap-3 rounded-2xl p-4 transition-transform hover:-translate-y-0.5"
+          >
+            <div>
+              <div className="text-[13.5px] font-semibold text-ink">Want the detail behind Scope 1, 2, and 3?</div>
+              <p className="mt-0.5 text-[12.5px] text-ink2">All fifteen Scope 3 categories, explained with real examples.</p>
+            </div>
+            <span className="whitespace-nowrap text-[13px] font-semibold text-accent">Explore scopes →</span>
+          </Link>
+
+          <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
             {PROCESS_STEPS.map((s) => (
               <div key={s.n} className="glass rounded-xl p-3.5">
                 <div className="font-mono text-[11px] font-semibold text-accent">{s.n}</div>
