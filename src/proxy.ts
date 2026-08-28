@@ -11,8 +11,10 @@ export function proxy(req: NextRequest) {
   // request doesn't need to pay for.
   const signedIn = req.cookies.has("gl_org") && req.cookies.has("gl_user");
   const isLogin = req.nextUrl.pathname === "/login";
+  // Public education page (redesign spec §06) — no sign-in required, by design.
+  const isPublic = isLogin || req.nextUrl.pathname === "/understand";
 
-  if (!signedIn && !isLogin) {
+  if (!signedIn && !isPublic) {
     const url = req.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);

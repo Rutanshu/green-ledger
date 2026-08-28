@@ -1,6 +1,6 @@
+import Link from "next/link";
 import { quickLogin } from "./actions";
 import { SignInForm } from "./SignInForm";
-import { RegTimeline } from "./RegTimeline";
 import { ROLE_LABEL, type Role } from "@/lib/auth/permissions";
 
 const DEMO_ACCOUNTS: Array<{ role: Role; email: string; can: string }> = [
@@ -67,18 +67,17 @@ export default function LoginPage() {
           </div>
 
           <div className="mt-12">
-            <h2 className="text-sm font-semibold text-ink">Why the rules keep moving</h2>
+            <h2 className="text-sm font-semibold text-ink">New to sustainability reporting?</h2>
             <p className="mt-1 max-w-md text-[13px] text-ink2">
-              CSRD's scope has changed twice in the last year. The direction — mandatory, audited, GHG Protocol–based
-              disclosure — hasn't.
+              What CSRD and Omnibus I actually require, a plain-language checklist of what a company needs to do, and
+              a nine-question readiness check — no sign-in needed.
             </p>
-            <div className="mt-6">
-              <RegTimeline />
-            </div>
-            <p className="mt-6 max-w-md text-xs text-muted">
-              Current as of the EU's Omnibus I reform, in force 18 March 2026. Not legal advice — thresholds and
-              dates are still moving; confirm against your own counsel.
-            </p>
+            <Link
+              href="/understand"
+              className="mt-4 inline-block rounded-lg border border-border bg-surface px-4 py-2 text-[13px] font-medium hover:bg-track"
+            >
+              Understand your sustainability reporting →
+            </Link>
           </div>
         </div>
 
