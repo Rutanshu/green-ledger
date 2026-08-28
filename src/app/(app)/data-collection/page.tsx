@@ -58,10 +58,7 @@ export default async function DataCollectionPage() {
       <h1 className="text-xl font-semibold">Data Collection</h1>
       <p className="mt-0.5 text-[13px] text-ink2">
         {canEdit ? (
-          <>
-            Live — edit a value and save. Completeness recalculates immediately via the same{" "}
-            <code className="font-mono">computeCompleteness()</code> used everywhere else.
-          </>
+          "Live — edit a value and save. Your progress updates the moment you save, no need to refresh."
         ) : (
           "Read-only for your role — you can see every answer, but editing is off."
         )}

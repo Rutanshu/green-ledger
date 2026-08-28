@@ -5,6 +5,7 @@ import { orgScopedClient } from "@/lib/db/tenant";
 import { can } from "@/lib/auth/permissions";
 import { getOrgLabelOverrides } from "@/lib/labels/getOrgOverrides";
 import { Label } from "@/components/Label";
+import { HEALTH_LABEL } from "@/lib/factors";
 import { SectionForm } from "../SectionForm";
 import { QuestionForm } from "../QuestionForm";
 import { BindingForm } from "../BindingForm";
@@ -88,7 +89,7 @@ export default async function TemplateEditorPage({ params }: { params: Promise<{
               <div>
                 <div className="font-semibold">{section.title}</div>
                 <div className="mt-0.5 text-[13px] text-ink2">
-                  <Label entityKind="SCOPE" code={section.scope} overrides={labelOverrides} />
+                  <Label entityKind="SCOPE" code={section.scope} overrides={labelOverrides} showInfo />
                   {section.scope3Category ? ` · category ${section.scope3Category}` : ""}
                 </div>
               </div>
@@ -120,7 +121,7 @@ export default async function TemplateEditorPage({ params }: { params: Promise<{
                     <div className="flex items-center gap-2">
                       {q.binding && (
                         <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${HEALTH_STYLE[q.binding.health]}`}>
-                          {q.binding.health.replaceAll("_", " ")}
+                          {HEALTH_LABEL[q.binding.health]}
                         </span>
                       )}
                       {canEdit && (
@@ -169,7 +170,7 @@ export default async function TemplateEditorPage({ params }: { params: Promise<{
                       <div className="flex items-center gap-2">
                         {p.binding && (
                           <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${HEALTH_STYLE[p.binding.health]}`}>
-                            {p.binding.health.replaceAll("_", " ")}
+                            {HEALTH_LABEL[p.binding.health]}
                           </span>
                         )}
                         {canEdit && (

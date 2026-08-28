@@ -157,6 +157,14 @@ export function isPublishable(h: BindingHealth): boolean {
   return h === 'OK' || h === 'FALLBACK_REGION';
 }
 
+/** Plain-language health text — never render a BindingHealth value itself to a user. */
+export const HEALTH_LABEL: Record<BindingHealth, string> = {
+  OK: 'Linked',
+  FALLBACK_REGION: 'Using a general figure',
+  AMBIGUOUS: 'Two factors match — pick one',
+  BROKEN: 'No factor found yet',
+};
+
 // ─────────────── mid-year factor changes ───────────────
 
 export interface PeriodSlice {

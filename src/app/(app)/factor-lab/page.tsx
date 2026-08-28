@@ -3,6 +3,7 @@ import { orgScopedClient } from "@/lib/db/tenant";
 import { can } from "@/lib/auth/permissions";
 import { getOrgLabelOverrides } from "@/lib/labels/getOrgOverrides";
 import { Label } from "@/components/Label";
+import { HEALTH_LABEL } from "@/lib/factors";
 import { retestBinding } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -63,7 +64,7 @@ export default async function FactorLabPage() {
               <tr key={binding.id} className="border-b border-grid last:border-0">
                 <td className="px-4 py-2.5 font-medium">{question.code}</td>
                 <td className="px-4 py-2.5 text-ink2">
-                  <Label entityKind="ACTIVITY_TYPE" code={binding.activityType} overrides={labelOverrides} />
+                  <Label entityKind="ACTIVITY_TYPE" code={binding.activityType} overrides={labelOverrides} showInfo />
                 </td>
                 <td className="px-4 py-2.5 text-ink2">{binding.fuelOrMaterialCode}</td>
                 <td className="px-4 py-2.5 text-ink2">{binding.regionStrategy.replaceAll("_", " ").toLowerCase()}</td>
@@ -72,7 +73,7 @@ export default async function FactorLabPage() {
                     title={binding.healthMessage ?? undefined}
                     className={`rounded-full px-2 py-0.5 text-xs font-medium ${HEALTH_STYLE[binding.health]}`}
                   >
-                    {binding.health.replaceAll("_", " ")}
+                    {HEALTH_LABEL[binding.health]}
                   </span>
                 </td>
                 {canManage && (
@@ -117,7 +118,7 @@ export default async function FactorLabPage() {
                   <tr key={f.id} className="border-t border-grid">
                     <td className="px-4 py-2 font-medium">{f.fuelOrMaterialCode}</td>
                     <td className="px-4 py-2 text-ink2">
-                      <Label entityKind="ACTIVITY_TYPE" code={f.activityType} overrides={labelOverrides} />
+                      <Label entityKind="ACTIVITY_TYPE" code={f.activityType} overrides={labelOverrides} showInfo />
                     </td>
                     <td className="px-4 py-2 text-ink2">{f.region}</td>
                     <td className="px-4 py-2 text-ink2">{Number(f.value).toLocaleString()}</td>

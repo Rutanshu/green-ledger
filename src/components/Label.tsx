@@ -16,15 +16,30 @@ export function Label({
   overrides,
   context,
   className,
+  showInfo,
 }: {
   entityKind: LabelEntityKind;
   code: string;
   overrides: readonly LabelOverride[];
   context?: LabelContext;
   className?: string;
+  /** Also surface resolved.description, if one exists, as a hover/focus tooltip. */
+  showInfo?: boolean;
 }) {
   const resolved = resolveLabel(entityKind, code, overrides, SYSTEM_DEFAULTS[entityKind] ?? {}, context);
-  return <span className={className}>{resolved.label}</span>;
+  return (
+    <span className={className}>
+      {resolved.label}
+      {showInfo && resolved.description && (
+        <span className="info-dot" tabIndex={0} aria-label={resolved.description}>
+          <span aria-hidden="true">ⓘ</span>
+          <span className="info-tip" role="tooltip">
+            {resolved.description}
+          </span>
+        </span>
+      )}
+    </span>
+  );
 }
 
 /** For places that need the plain string (a <select> option, an aria-label) rather than a rendered element. */

@@ -125,7 +125,10 @@ export async function publishTemplate(templateId: string): Promise<ActionState> 
     }
   }
   if (broken.length > 0) {
-    return { ok: false, error: `Can't publish — broken/ambiguous binding on: ${[...new Set(broken)].join(", ")}. Fix in Factor Lab first.` };
+    return {
+      ok: false,
+      error: `Can't publish yet — ${[...new Set(broken)].join(", ")} ${broken.length > 1 ? "have" : "has"} no emission factor linked. Fix ${broken.length > 1 ? "them" : "it"} in Factor Lab first.`,
+    };
   }
 
   await withOrgTransaction(orgId, async (tx) => {

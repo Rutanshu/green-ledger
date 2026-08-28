@@ -1,6 +1,7 @@
 import { getCurrentMembership } from "@/lib/demo-org";
 import { can } from "@/lib/auth/permissions";
 import { Denied } from "../_components/Denied";
+import { CONSOLIDATION_LABEL } from "@/lib/org/consolidationLabel";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +30,7 @@ export default async function OrganisationPage() {
 
       <div className="mt-5 max-w-lg rounded-[11px] glass">
         <Row label="Legal name" value={org.legalName} />
-        <Row label="Consolidation approach" value={org.consolidationApproach.replaceAll("_", " ").toLowerCase()} />
+        <Row label="How you count shared sites" value={CONSOLIDATION_LABEL[org.consolidationApproach] ?? org.consolidationApproach} />
         <Row label="Base year" value={String(org.baseYear ?? "—")} />
         <Row label="Base year rationale" value={org.baseYearRationale ?? "—"} />
         <Row label="Fiscal year starts" value={`month ${org.fiscalYearStartMonth}`} />

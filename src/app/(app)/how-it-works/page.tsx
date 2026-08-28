@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getCurrentOrg } from "@/lib/demo-org";
 import { orgScopedClient } from "@/lib/db/tenant";
+import { CONSOLIDATION_LABEL } from "@/lib/org/consolidationLabel";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,7 @@ async function getChecklistData() {
   if (!org) return null;
   const db = orgScopedClient(org.id);
 
-  const [siteCount, assetCount, labelCount, factorSetCount, template] = await Promise.all([
+  const [siteCount, assetCount, labelCount, factorSetCount, template, memberCount, startedAssignments, totalAssignments] = await Promise.all([
     db.site.count(),
     db.siteAsset.count(),
     db.labelOverride.count(),
@@ -25,12 +26,15 @@ async function getChecklistData() {
       where: { status: "PUBLISHED" },
       include: { sections: { include: { questions: { include: { binding: true } } } } },
     }),
+    db.membership.count(),
+    db.questionnaireAssignment.count({ where: { status: { not: "NOT_STARTED" } } }),
+    db.questionnaireAssignment.count(),
   ]);
 
   const bindings = (template?.sections ?? []).flatMap((s) => s.questions).map((q) => q.binding).filter((b) => b !== null);
   const broken = bindings.filter((b) => b!.health === "BROKEN" || b!.health === "AMBIGUOUS").length;
 
-  return { org, siteCount, assetCount, labelCount, factorSetCount, template, broken };
+  return { org, siteCount, assetCount, labelCount, factorSetCount, template, broken, memberCount, startedAssignments, totalAssignments };
 }
 
 function Check({ done, partial }: { done?: boolean; partial?: boolean }) {
@@ -67,7 +71,7 @@ export default async function HowItWorksPage() {
               <div className="flex-1">
                 <div className="font-medium">Organisation basics</div>
                 <p className="text-[13px] text-ink2">
-                  Base year {data.org.baseYear}, {data.org.consolidationApproach.replaceAll("_", " ").toLowerCase()} consolidation.
+                  Base year {data.org.baseYear}. {CONSOLIDATION_LABEL[data.org.consolidationApproach] ?? data.org.consolidationApproach}.
                 </p>
               </div>
               <Link href="/organisation" className="self-center text-[13px] font-medium text-accent hover:underline">
@@ -138,21 +142,31 @@ export default async function HowItWorksPage() {
             </div>
 
             <div className="flex items-start gap-3 p-4">
-              <Check />
+              <Check done />
               <div className="flex-1">
                 <div className="font-medium">Assign and invite your teams</div>
-                <p className="text-[13px] text-ink2">Not started — no auth or user accounts yet.</p>
+                <p className="text-[13px] text-ink2">
+                  {data.memberCount} accounts signed in, one per role. Inviting a new person isn&apos;t built yet — see Users
+                  &amp; roles.
+                </p>
               </div>
+              <Link href="/users" className="self-center text-[13px] font-medium text-accent hover:underline">
+                Users &amp; roles
+              </Link>
             </div>
 
             <div className="flex items-start gap-3 p-4">
-              <Check partial />
+              <Check partial={data.startedAssignments > 0 && data.startedAssignments < data.totalAssignments} done={data.totalAssignments > 0 && data.startedAssignments === data.totalAssignments} />
               <div className="flex-1">
                 <div className="font-medium">Collect, review, approve</div>
                 <p className="text-[13px] text-ink2">
-                  Demo answers exist in the database (seeded directly) — nobody has filled the form through the actual Data Collection screen yet, because it doesn't exist.
+                  {data.startedAssignments} of {data.totalAssignments} site submissions started. Enter data, a different
+                  person reviews and approves, then the period locks.
                 </p>
               </div>
+              <Link href="/data-collection" className="self-center text-[13px] font-medium text-accent hover:underline">
+                Data Collection
+              </Link>
             </div>
           </div>
         </>
