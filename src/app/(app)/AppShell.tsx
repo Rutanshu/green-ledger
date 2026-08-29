@@ -15,6 +15,7 @@ const NAV_PRIMARY = [
   { href: "/review", label: "Review Data", icon: "✓", requires: "manage_questionnaire" as const },
   { href: "/data-collection", label: "Data Collection", icon: "✎" },
   { href: "/reports", label: "Reports", icon: "▧" },
+  { href: "/calculators", label: "Calculators", icon: "🧮", requires: "manage_questionnaire" as const },
 ];
 
 const NAV_COMPANY = [
