@@ -3,6 +3,7 @@ import { getCurrentMembership } from "@/lib/demo-org";
 import { orgScopedClient } from "@/lib/db/tenant";
 import { can } from "@/lib/auth/permissions";
 import { formatQuestionLabel } from "@/lib/labels/formatQuestionLabel";
+import { evaluateVisibility, type VisibilityRule, type VisibilityAsset } from "@/lib/visibility";
 import { Denied } from "../_components/Denied";
 
 export const dynamic = "force-dynamic";
@@ -18,6 +19,7 @@ export default async function ProgressPage() {
   const sites = await db.site.findMany({
     orderBy: { code: "asc" },
     include: {
+      assets: true,
       assignments: {
         include: { template: { include: { sections: { include: { questions: true } } } }, period: true },
       },
@@ -34,8 +36,31 @@ export default async function ProgressPage() {
 
   const rows = sites.map((site) => {
     const assignment = site.assignments[0];
+    // Filtered by visible_if, not just isRequired — a site with no forklift
+    // was showing "LPG for forklift" as missing forever. See CLAUDE.md rule
+    // 10: one visibility function, and this page had stopped using it.
+    const assets: VisibilityAsset[] = site.assets.map((a) => ({
+      category: a.category,
+      assetTypeCode: a.assetTypeCode,
+      fuelOrMaterialCode: a.fuelOrMaterialCode,
+      status: a.status,
+      commissionedOn: a.commissionedOn,
+      decommissionedOn: a.decommissionedOn,
+    }));
     const questions = assignment
-      ? assignment.template.sections.flatMap((s) => s.questions).filter((q) => q.isRequired && q.allowedUnits.length > 0)
+      ? assignment.template.sections
+          .flatMap((s) => s.questions)
+          .filter((q) => q.isRequired && q.allowedUnits.length > 0)
+          .filter((q) =>
+            evaluateVisibility(q.visibleIf as VisibilityRule | null, {
+              siteType: site.siteType,
+              siteCountry: site.country,
+              assets,
+              answers: {},
+              periodStart: assignment.period.startsOn,
+              periodEnd: assignment.period.endsOn,
+            }),
+          )
       : [];
     const answered = questions.filter((q) => {
       const v = valueByKey.get(`${site.id}:${assignment!.reportingPeriodId}:${q.code}`);

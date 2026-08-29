@@ -13,6 +13,7 @@
  * the same org is a genuine conflict — reported, not guessed at, and that
  * code's Position/PositionValues are skipped entirely.
  */
+import { Prisma } from "../src/generated/prisma";
 import { adminPrisma } from "../src/lib/db/admin-client";
 import { parseFormula, FormulaSyntaxError } from "../src/lib/formula";
 
@@ -56,6 +57,14 @@ async function main() {
       }
     }
 
+    // Position.visibleIf was never populated by this script's first run — every
+    // migrated Position ended up universally visible regardless of the asset
+    // gating its source Question actually had (site_has_asset etc.), which is
+    // why sites without a matching asset still showed the question as "missing"
+    // on /progress. Written on both create AND update so re-running this
+    // script backfills the ones that already exist, not just new ones.
+    const visibleIf = (first.visibleIf ?? Prisma.DbNull) as never;
+
     const position = await adminPrisma.position.upsert({
       where: { organizationId_positionCode: { organizationId: orgId, positionCode: code } },
       create: {
@@ -66,9 +75,10 @@ async function main() {
         dimension: first.unitDimension,
         allowedUnits: first.allowedUnits,
         formulaAst: formulaAst === null ? undefined : (formulaAst as never),
+        visibleIf,
         tags: [],
       },
-      update: {},
+      update: { visibleIf },
     });
     createdPositions++;
     for (const q of group) positionIdByQuestionId.set(q.id, position.id);

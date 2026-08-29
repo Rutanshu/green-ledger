@@ -20,6 +20,7 @@ import {
   ASSET_TYPES,
   SITE_TYPES,
   DEFRA_2026,
+  EPA_2026,
   GRID_2026,
   DEMO_SITES,
   DEMO_ASSETS,
@@ -61,6 +62,15 @@ const FUEL_OR_MATERIAL_LABELS: Record<string, string> = {
   hgv_average: 'HGV freight (average)',
   raw_materials: 'Raw materials',
   cleaning_services: 'Contract cleaning services',
+  capital_goods: 'Capital goods',
+  diesel_wtt: 'Diesel (well-to-tank)',
+  electricity_td_losses: 'Grid electricity (transmission & distribution losses)',
+  average_car_commute: 'Average car (employee commuting)',
+  leased_assets: 'Leased assets',
+  processing_sold_products: 'Processing of sold products',
+  use_of_sold_products: 'Use of sold products',
+  franchise_operations: 'Franchise operations',
+  investments: 'Investments',
 };
 
 /**
@@ -251,10 +261,23 @@ async function main() {
       sourceUrl: GRID_2026.sourceUrl,
     },
   });
+  const epaSet = await prisma.emissionFactorSet.create({
+    data: {
+      organizationId: null,
+      publisher: EPA_2026.publisher,
+      name: EPA_2026.name,
+      version: EPA_2026.version,
+      publishedOn: new Date(EPA_2026.publishedOn),
+      regionScope: EPA_2026.regionScope,
+      licence: EPA_2026.licence,
+      sourceUrl: EPA_2026.sourceUrl,
+    },
+  });
 
   const factorRows = [
     ...DEFRA_2026.factors.map((f) => ({ ...f, set: defraSet, publishedOn: DEFRA_2026.publishedOn })),
     ...GRID_2026.factors.map((f) => ({ ...f, set: gridSet, publishedOn: GRID_2026.publishedOn })),
+    ...EPA_2026.factors.map((f) => ({ ...f, set: epaSet, publishedOn: EPA_2026.publishedOn })),
   ];
 
   const createdFactors = [];
