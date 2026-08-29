@@ -16,6 +16,7 @@ import { assertFreshWrite, StaleWriteError } from "@/lib/concurrency";
 import { assertCompleteForSubmission, IncompleteAssignmentError, transitionAssignment, IllegalAssignmentTransitionError, type AssignmentStatus } from "@/lib/assignments";
 import { assertDistinctApprover, SelfApprovalError } from "@/lib/workflow/fourEyes";
 import { can, ROLE_LABEL } from "@/lib/auth/permissions";
+import { resolveOrCreatePosition } from "@/lib/positions/resolveOrCreate";
 import type { UnitCode } from "@/lib/units";
 import type { FuelPropertyRecord } from "@/lib/units/fuelProperty";
 
@@ -116,21 +117,10 @@ export async function submitAnswer(_prev: SubmitAnswerState, formData: FormData)
   // now lives in Position/PositionValue, keyed by (site, period) rather
   // than (assignment, question), matching BUILD_PLAN's "a position appears
   // in any number of questionnaires and is one storage slot." A question
-  // authored before this cutover has no Position yet; create one lazily,
-  // matching the same code/type/dimension mapping the one-off migration
-  // script used, so a brand-new question works without a separate backfill.
-  const position = await db.position.upsert({
-    where: { organizationId_positionCode: { organizationId: org.id, positionCode: question.code } },
-    create: {
-      organizationId: org.id,
-      positionCode: question.code,
-      labelKey: question.label,
-      type: question.inputType === "INDICATOR" ? "INDICATOR" : "FLOW",
-      dimension: question.unitDimension,
-      allowedUnits: question.allowedUnits,
-    },
-    update: {},
-  });
+  // authored before this cutover has no Position yet; create one lazily
+  // (resolveOrCreatePosition), so a brand-new question works without a
+  // separate backfill.
+  const position = await resolveOrCreatePosition(db, org.id, question);
 
   // Reference data for calculation — read-only, fetched before the
   // transaction so the transaction body is just writes.

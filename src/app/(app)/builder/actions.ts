@@ -10,6 +10,7 @@ import { recordAudit } from "@/lib/audit";
 import { checkBindingHealth } from "@/lib/factors";
 import { activateProfile, supersedeProfile } from "@/lib/factors/impactProfile";
 import { buildFactorCandidates } from "@/lib/db/factor-candidates";
+import { resolveOrCreatePosition } from "@/lib/positions/resolveOrCreate";
 import type { UnitDimension } from "@/lib/units";
 import {
   parseFormula, checkFormulaDimension, extractDependencies, checkForCycle,
@@ -445,6 +446,15 @@ export async function createQuestion(_prev: ActionState, formData: FormData): Pr
       entityId: q.id,
       after: q,
     });
+
+    // Phase B of the Position-migration cleanup: create the Position in
+    // the same transaction as the Question, not lazily on first answer —
+    // previously a brand-new question was invisible in Position Library /
+    // the Builder's "add existing position" picker until someone answered
+    // it. Same shared helper the lazy paths use, so behavior is identical
+    // either way it happens.
+    await resolveOrCreatePosition(tx, orgId, q);
+
     return q;
   });
 

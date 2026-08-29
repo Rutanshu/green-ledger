@@ -12,6 +12,7 @@ import { calculateEmissions, calculateDualBasis, type CalcInput, type CalcResult
 import { buildFactorCandidates } from "@/lib/db/factor-candidates";
 import { projectAnswer } from "@/lib/project";
 import { parseCsvRows, csvHeaders, identityMapping, applyMapping, validateRow, type ColumnMapping, type ValidationContext } from "@/lib/import";
+import { resolveOrCreatePosition } from "@/lib/positions/resolveOrCreate";
 import type { UnitCode } from "@/lib/units";
 import type { FuelPropertyRecord } from "@/lib/units/fuelProperty";
 
@@ -184,18 +185,7 @@ export async function commitImport(batchId: string): Promise<ActionState> {
         }
 
         // Step 2.2 Phase C: same lazy resolve-or-create as submitAnswer.
-        const position = await tx.position.upsert({
-          where: { organizationId_positionCode: { organizationId: org.id, positionCode: question.code } },
-          create: {
-            organizationId: org.id,
-            positionCode: question.code,
-            labelKey: question.label,
-            type: question.inputType === "INDICATOR" ? "INDICATOR" : "FLOW",
-            dimension: question.unitDimension,
-            allowedUnits: question.allowedUnits,
-          },
-          update: {},
-        });
+        const position = await resolveOrCreatePosition(tx, org.id, question);
         const positionValueKey = {
           positionId_siteId_reportingPeriodId_line: { positionId: position.id, siteId: site.id, reportingPeriodId: assignment.reportingPeriodId, line: 1 },
         } as const;

@@ -11,6 +11,7 @@ import { projectAnswer } from "@/lib/project";
 import { recordAudit } from "@/lib/audit";
 import { assertDistinctApprover, decideRestatement, IllegalRestatementTransitionError, SelfApprovalError } from "@/lib/audit/restatement";
 import { can, ROLE_LABEL } from "@/lib/auth/permissions";
+import { resolveOrCreatePosition } from "@/lib/positions/resolveOrCreate";
 import type { UnitCode } from "@/lib/units";
 import type { FuelPropertyRecord } from "@/lib/units/fuelProperty";
 
@@ -184,18 +185,7 @@ export async function decideRestatementAction(restatementId: string, decision: "
 
     // Step 2.2 Phase C: same lazy resolve-or-create as submitAnswer — a
     // question authored before the cutover may not have a Position yet.
-    const position = await tx.position.upsert({
-      where: { organizationId_positionCode: { organizationId: org.id, positionCode: question.code } },
-      create: {
-        organizationId: org.id,
-        positionCode: question.code,
-        labelKey: question.label,
-        type: question.inputType === "INDICATOR" ? "INDICATOR" : "FLOW",
-        dimension: question.unitDimension,
-        allowedUnits: question.allowedUnits,
-      },
-      update: {},
-    });
+    const position = await resolveOrCreatePosition(tx, org.id, question);
     const positionValueKey = {
       positionId_siteId_reportingPeriodId_line: { positionId: position.id, siteId: assignment.siteId, reportingPeriodId: assignment.reportingPeriodId, line: 1 },
     } as const;
