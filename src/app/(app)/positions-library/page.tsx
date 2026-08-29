@@ -1,8 +1,10 @@
+import { Suspense } from "react";
 import { getCurrentMembership } from "@/lib/demo-org";
 import { orgScopedClient } from "@/lib/db/tenant";
 import { can } from "@/lib/auth/permissions";
 import { Denied } from "../_components/Denied";
 import { SourcesTabs } from "../_components/SourcesTabs";
+import { ScopeSubNav } from "../builder/ScopeSubNav";
 import { PositionForm } from "./PositionForm";
 import { deletePosition } from "./actions";
 import { formatQuestionLabel } from "@/lib/labels/formatQuestionLabel";
@@ -18,19 +20,33 @@ const TYPE_STYLE: Record<string, string> = {
   OVERVIEW: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
 };
 
-export default async function PositionsLibraryPage() {
+export default async function PositionsLibraryPage({ searchParams }: { searchParams: Promise<{ scope?: string }> }) {
   const membership = await getCurrentMembership();
   if (!membership) return null;
   const canEdit = can(membership.role, "manage_questionnaire");
   if (!canEdit) return <Denied role={membership.role} />;
   const db = orgScopedClient(membership.org.id);
+  const { scope: scopeFilter } = await searchParams;
 
-  const positions = await db.position.findMany({
+  const allPositions = await db.position.findMany({
     include: {
       _count: { select: { values: true, assetValues: true, sectionItems: true } },
+      binding: { select: { scope: true, scope3Category: true } },
     },
     orderBy: { positionCode: "asc" },
   });
+
+  // Position itself carries no scope field — it comes from the position's
+  // (optional, 1:1) FactorBinding. A position with no binding yet has no
+  // scope to filter by, so it only shows under "All".
+  const positionScopeKey = (p: (typeof allPositions)[number]) =>
+    !p.binding ? null : p.binding.scope === "SCOPE_3" && p.binding.scope3Category ? `3.${p.binding.scope3Category}` : p.binding.scope === "SCOPE_1" ? "1" : "2";
+  const scopeCounts: Record<string, number> = {};
+  for (const p of allPositions) {
+    const key = positionScopeKey(p);
+    if (key) scopeCounts[key] = (scopeCounts[key] ?? 0) + 1;
+  }
+  const positions = scopeFilter ? allPositions.filter((p) => positionScopeKey(p) === scopeFilter) : allPositions;
 
   return (
     <>
@@ -40,6 +56,12 @@ export default async function PositionsLibraryPage() {
         The global pool every questionnaire is assembled from. A position lives here once, independent of any
         template — add it to as many sections as you like from Builder; it stays one storage slot.
       </p>
+
+      <div className="mt-5">
+        <Suspense fallback={null}>
+          <ScopeSubNav counts={scopeCounts} />
+        </Suspense>
+      </div>
 
       <div className="mt-5">
         <PositionForm />
