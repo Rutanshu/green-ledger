@@ -219,7 +219,8 @@ export async function decideRestatementAction(restatementId: string, decision: "
     if (!binding) return;
 
     const [factorSets, gwpRows, ownership, fuelPropertyRows] = await Promise.all([
-      tx.emissionFactorSet.findMany({ include: { factors: true } }),
+      // Scoped to this one binding's fuel — see data-collection/actions.ts.
+      tx.emissionFactorSet.findMany({ include: { factors: { where: { fuelOrMaterialCode: binding.fuelOrMaterialCode } } } }),
       tx.gwpSet.findMany({ where: { name: org.defaultGwpSetId ?? "AR6" } }),
       tx.siteOwnershipPeriod.findFirst({
         where: { siteId: assignment.siteId, validFrom: { lte: assignment.period.endsOn } },

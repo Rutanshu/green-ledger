@@ -141,7 +141,10 @@ export async function submitAnswer(_prev: SubmitAnswerState, formData: FormData)
   let fuelProperties: FuelPropertyRecord[] = [];
   if (binding) {
     const [factorSets, gwpRows, ownership, fuelPropertyRows] = await Promise.all([
-      db.emissionFactorSet.findMany({ include: { factors: true } }),
+      // Scoped to this one binding's fuel — a reference library can hold
+      // any number of factors for fuels nothing here is bound to; loading
+      // all of them on every single answer save doesn't scale with that.
+      db.emissionFactorSet.findMany({ include: { factors: { where: { fuelOrMaterialCode: binding.fuelOrMaterialCode } } } }),
       rawPrisma.gwpSet.findMany({ where: { name: org.defaultGwpSetId ?? "AR6" } }),
       rawPrisma.siteOwnershipPeriod.findFirst({
         where: { siteId: assignment.siteId, validFrom: { lte: period.endsOn } },

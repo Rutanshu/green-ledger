@@ -145,8 +145,17 @@ export async function commitImport(batchId: string): Promise<ActionState> {
   const period = await db.reportingPeriod.findFirst({ where: { id: batch.reportingPeriodId ?? undefined } });
   if (!period) return { ok: false, error: "Reporting period no longer exists." };
 
+  // Scoped to fuels the rows in THIS batch actually bind to — see
+  // data-collection/actions.ts for why an unfiltered fetch doesn't scale.
+  const batchQuestionCodes = [...new Set(batch.rows.map((r) => r.questionCode).filter((c): c is string => !!c))];
+  const batchBoundQuestions = await db.question.findMany({
+    where: { code: { in: batchQuestionCodes }, section: { template: { organizationId: org.id } } },
+    include: { binding: true },
+  });
+  const batchFuelCodes = [...new Set(batchBoundQuestions.map((q) => q.binding?.fuelOrMaterialCode).filter((c): c is string => !!c))];
+
   const [factorSets, gwpRows, sites] = await Promise.all([
-    db.emissionFactorSet.findMany({ include: { factors: true } }),
+    db.emissionFactorSet.findMany({ include: { factors: { where: { fuelOrMaterialCode: { in: batchFuelCodes } } } } }),
     rawPrisma.gwpSet.findMany({ where: { name: org.defaultGwpSetId ?? "AR6" } }),
     db.site.findMany({ include: { assignments: { where: { reportingPeriodId: batch.reportingPeriodId ?? undefined } } } }),
   ]);

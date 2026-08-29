@@ -79,17 +79,6 @@ export async function publishTemplate(templateId: string): Promise<ActionState> 
   });
   if (!template) return { ok: false, error: "Template not found." };
 
-  // CLAUDE.md rule 9: a question cannot be published with a broken or
-  // ambiguous factor binding. A form that silently records zeros is the
-  // worst possible bug in this product — so this is a hard gate, not a
-  // warning, and it re-checks live rather than trusting a stale health
-  // column that might predate the question's last edit.
-  const [factorSets, site] = await Promise.all([
-    db.emissionFactorSet.findMany({ include: { factors: true } }),
-    db.site.findFirst({ orderBy: { code: "asc" } }),
-  ]);
-  const candidates = buildFactorCandidates(factorSets);
-
   const boundQuestions = template.sections
     .flatMap((s) => s.questions)
     .filter((q): q is typeof q & { binding: NonNullable<typeof q.binding> } => q.binding !== null)
@@ -104,6 +93,21 @@ export async function publishTemplate(templateId: string): Promise<ActionState> 
       .map((i) => [i.position.id, { code: i.position.positionCode, binding: i.position.binding }] as const),
   ).values()];
   const allBound = [...boundQuestions, ...boundPositions];
+
+  // CLAUDE.md rule 9: a question cannot be published with a broken or
+  // ambiguous factor binding. A form that silently records zeros is the
+  // worst possible bug in this product — so this is a hard gate, not a
+  // warning, and it re-checks live rather than trusting a stale health
+  // column that might predate the question's last edit.
+  const boundFuelCodes = [...new Set(allBound.map(({ binding: b }) => b.fuelOrMaterialCode))];
+  const [factorSets, site] = await Promise.all([
+    // Scoped to fuels this template actually binds to — see
+    // data-collection/actions.ts for why an unfiltered fetch doesn't scale.
+    db.emissionFactorSet.findMany({ include: { factors: { where: { fuelOrMaterialCode: { in: boundFuelCodes } } } } }),
+    db.site.findFirst({ orderBy: { code: "asc" } }),
+  ]);
+  const candidates = buildFactorCandidates(factorSets);
+
   const broken: string[] = [];
   for (const { binding: b } of allBound) {
     if (!site) break;
@@ -610,7 +614,8 @@ export async function upsertBinding(_prev: ActionState, formData: FormData): Pro
   // binding" uses — so a newly-bound question never shows a stale/unknown
   // state, and the builder can warn before the user even tries to publish.
   const [factorSets, site] = await Promise.all([
-    db.emissionFactorSet.findMany({ include: { factors: true } }),
+    // Scoped to this one binding's fuel — see data-collection/actions.ts.
+    db.emissionFactorSet.findMany({ include: { factors: { where: { fuelOrMaterialCode: d.fuelOrMaterialCode } } } }),
     db.site.findFirst({ orderBy: { code: "asc" } }),
   ]);
   const candidates = buildFactorCandidates(factorSets);
