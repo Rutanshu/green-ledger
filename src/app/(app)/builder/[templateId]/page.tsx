@@ -160,7 +160,7 @@ export default async function TemplateEditorPage({ params }: { params: Promise<{
                   <div key={item.id} className="p-4">
                     <div className="flex items-start justify-between gap-4">
                       <div>
-                        <div className="text-[13px] font-medium">{p.labelKey}</div>
+                        <div className="text-[13px] font-medium">{formatQuestionLabel(p.labelKey, "each period")}</div>
                         <div className="mt-1 flex flex-wrap gap-1.5 text-xs text-muted">
                           <span className="font-mono">{p.positionCode}</span>
                           <span>· {p.type.toLowerCase()}</span>

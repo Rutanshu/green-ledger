@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useRef, useState } from "react";
 import { addPositionToSection } from "./actions";
+import { formatQuestionLabel } from "@/lib/labels/formatQuestionLabel";
 
 interface PositionOption {
   id: string;
@@ -59,7 +60,7 @@ export function AddPositionToSectionForm({ sectionId, positions }: { sectionId: 
         </option>
         {positions.map((p) => (
           <option key={p.id} value={p.id}>
-            {p.positionCode} — {p.labelKey} ({p.type})
+            {p.positionCode} — {formatQuestionLabel(p.labelKey, "each period")} ({p.type})
           </option>
         ))}
       </select>

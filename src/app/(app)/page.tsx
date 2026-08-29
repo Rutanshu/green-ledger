@@ -49,7 +49,13 @@ async function getDashboardData() {
     .flatMap((s) => s.questions)
     .map((q) => q.binding)
     .filter((b): b is NonNullable<typeof b> => b !== null);
-  const issues = bindings.filter((b) => b.health !== "OK").length;
+  // BROKEN/AMBIGUOUS mean no usable factor — a real, blocking problem.
+  // FALLBACK_REGION still calculates, just from a less specific factor —
+  // worth surfacing, not the same severity. Counting both as one
+  // undifferentiated "issue" made a dashboard with zero broken bindings
+  // read as if every single one needed urgent attention.
+  const broken = bindings.filter((b) => b.health === "BROKEN" || b.health === "AMBIGUOUS").length;
+  const usingFallback = bindings.filter((b) => b.health === "FALLBACK_REGION").length;
 
   const reporting = sites.filter((s) => s.assignments[0]?.status !== "NOT_STARTED" && s.assignments[0]);
   const avgCompleteness =
@@ -63,7 +69,8 @@ async function getDashboardData() {
     org,
     sites,
     bindingCount: bindings.length,
-    issues,
+    broken,
+    usingFallback,
     reporting: reporting.length,
     avgCompleteness,
     emissionRecordCount: emissionsAgg._count,
@@ -72,11 +79,24 @@ async function getDashboardData() {
   };
 }
 
-function Tile({ label, value, unit, note }: { label: string; value: string; unit?: string; note?: string }) {
+function Tile({
+  label,
+  value,
+  unit,
+  note,
+  tone,
+}: {
+  label: string;
+  value: string;
+  unit?: string;
+  note?: string;
+  tone?: "crit" | "warn";
+}) {
+  const valueColor = tone === "crit" ? "text-crit" : tone === "warn" ? "text-warn" : "text-ink";
   return (
     <div className="rounded-[11px] glass p-4">
       <div className="text-[11.5px] font-semibold uppercase tracking-wide text-muted">{label}</div>
-      <div className="mt-1 text-[26px] font-semibold tracking-tight">
+      <div className={`mt-1 text-[26px] font-semibold tracking-tight ${valueColor}`}>
         {value} {unit && <small className="text-sm font-medium text-ink2">{unit}</small>}
       </div>
       {note && <div className="text-xs text-ink2">{note}</div>}
@@ -104,7 +124,7 @@ export default async function Home() {
     );
   }
 
-  const { sites, bindingCount, issues, reporting, avgCompleteness, emissionRecordCount, emissionsTonnes, labelOverrides } = data;
+  const { sites, bindingCount, broken, usingFallback, reporting, avgCompleteness, emissionRecordCount, emissionsTonnes, labelOverrides } = data;
 
   return (
     <>
@@ -117,10 +137,17 @@ export default async function Home() {
         <Tile label="Sites reporting" value={`${reporting}`} unit={`of ${sites.length}`} />
         <Tile label="Avg. completeness" value={avgCompleteness.toFixed(0)} unit="%" />
         <Tile
-          label="Binding issues"
-          value={`${issues}`}
+          label="Broken bindings"
+          value={`${broken}`}
           unit={`of ${bindingCount} bound`}
-          note={issues > 0 ? "needs attention in Factor Lab" : undefined}
+          tone={broken > 0 ? "crit" : undefined}
+          note={
+            broken > 0
+              ? "no factor found — fix in Emission Sources"
+              : usingFallback > 0
+                ? `${usingFallback} using a general figure`
+                : undefined
+          }
         />
         {emissionRecordCount > 0 ? (
           <Tile label="Total emissions" value={emissionsTonnes} unit="tCO2e" note={`from ${emissionRecordCount} calculated records`} />

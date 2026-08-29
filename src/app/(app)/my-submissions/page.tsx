@@ -1,5 +1,6 @@
 import { getCurrentMembership } from "@/lib/demo-org";
 import { orgScopedClient } from "@/lib/db/tenant";
+import { formatQuestionLabel } from "@/lib/labels/formatQuestionLabel";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +29,7 @@ export default async function MySubmissionsPage() {
           {entries.map((v) => (
             <div key={v.id} className="flex items-center justify-between gap-4 p-4">
               <div>
-                <div className="text-[13.5px] font-medium">{v.position.labelKey}</div>
+                <div className="text-[13.5px] font-medium">{formatQuestionLabel(v.position.labelKey, v.period.label)}</div>
                 <div className="mt-0.5 text-xs text-muted">
                   {v.site.name} · {v.period.label} · {v.answeredAt ? v.answeredAt.toISOString().slice(0, 10) : "—"}
                 </div>

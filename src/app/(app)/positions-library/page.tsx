@@ -5,6 +5,7 @@ import { Denied } from "../_components/Denied";
 import { SourcesTabs } from "../_components/SourcesTabs";
 import { PositionForm } from "./PositionForm";
 import { deletePosition } from "./actions";
+import { formatQuestionLabel } from "@/lib/labels/formatQuestionLabel";
 
 export const dynamic = "force-dynamic";
 
@@ -63,7 +64,7 @@ export default async function PositionsLibraryPage() {
               return (
                 <tr key={p.id} className="border-b border-grid last:border-0">
                   <td className="px-4 py-2.5 font-mono text-xs">{p.positionCode}</td>
-                  <td className="px-4 py-2.5">{p.labelKey}</td>
+                  <td className="px-4 py-2.5">{formatQuestionLabel(p.labelKey, "each period")}</td>
                   <td className="px-4 py-2.5">
                     <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${TYPE_STYLE[p.type]}`}>{p.type}</span>
                     {p.dimension && <span className="ml-1.5 text-xs text-muted">· {p.dimension}</span>}

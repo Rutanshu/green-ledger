@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { orgScopedClient } from "@/lib/db/tenant";
+import { formatQuestionLabel } from "@/lib/labels/formatQuestionLabel";
 import type { CurrentMembership } from "@/lib/demo-org";
 
 async function getHomeData(membership: CurrentMembership) {
@@ -12,7 +13,7 @@ async function getHomeData(membership: CurrentMembership) {
     }),
     db.positionValue.findMany({
       where: { answeredById: membership.user.id, site: { organizationId: membership.org.id } },
-      include: { position: true, site: true },
+      include: { position: true, site: true, period: true },
       orderBy: { answeredAt: "desc" },
       take: 5,
     }),
@@ -71,7 +72,7 @@ export async function DataUserHome({ membership }: { membership: CurrentMembersh
           {recent.map((v) => (
             <div key={v.id} className="flex items-center justify-between gap-3 p-3.5 text-[13.5px]">
               <div>
-                <span className="font-medium">{v.position.labelKey}</span>{" "}
+                <span className="font-medium">{formatQuestionLabel(v.position.labelKey, v.period.label)}</span>{" "}
                 <span className="text-muted">— {v.site.name}</span>
               </div>
               <div className="flex items-center gap-2 text-ink2">
