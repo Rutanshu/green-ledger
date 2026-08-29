@@ -1,8 +1,8 @@
 /**
- * Design spec (Sphera walkthrough, Part I §1 / Part II §2): "the single
- * most important element on the screen" — every computed number states
- * when it was calculated. Every field rendered here already exists on
- * EmissionRecord (CLAUDE.md rule 2); this only formats, never computes.
+ * The single most important element on a calculated-value screen: every
+ * computed number states when it was calculated. Every field rendered
+ * here already exists on EmissionRecord (CLAUDE.md rule 2); this only
+ * formats, never computes.
  */
 function formatTimestamp(iso: string): string {
   const d = new Date(iso);

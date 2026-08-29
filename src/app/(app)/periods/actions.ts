@@ -336,10 +336,9 @@ export interface PeriodReadiness {
 /**
  * The period-close gate — one function, used both to render the
  * checklist and (server-side, re-checked rather than trusted from the
- * client) to refuse lockPeriod if anything is still open. Mirrors the
- * redesign spec's "release checklist" (imperative-coalescing-hollerith
- * Sphera notes): every facility approved, no BLOCK-severity rule
- * violations open, no broken/ambiguous emission-source bindings.
+ * client) to refuse lockPeriod if anything is still open. A standard
+ * ERP release checklist: every facility approved, no BLOCK-severity
+ * rule violations open, no broken/ambiguous emission-source bindings.
  */
 async function getPeriodReadiness(db: ReturnType<typeof orgScopedClient>, periodId: string): Promise<PeriodReadiness> {
   const assignments = await db.questionnaireAssignment.findMany({ where: { reportingPeriodId: periodId } });

@@ -1,10 +1,9 @@
 /**
- * Design spec (Sphera walkthrough, Part II §7 / Part III "Universal
- * conventions"): "a two-line feature that answers an auditor's first
- * question" — created-by/at and last-changed-by/at on any configuration
- * detail pane. Built entirely on AuditEvent, which every write path
- * already populates in the same transaction as the change (CLAUDE.md
- * rule 7) — no schema change, just reading what's already recorded.
+ * A two-line feature that answers an auditor's first question:
+ * created-by/at and last-changed-by/at on any configuration detail
+ * pane. Built entirely on AuditEvent, which every write path already
+ * populates in the same transaction as the change (CLAUDE.md rule 7) —
+ * no schema change, just reading what's already recorded.
  */
 import { orgScopedClient } from "@/lib/db/tenant";
 

@@ -1,9 +1,8 @@
 /**
- * Design spec (Sphera walkthrough, Part II §3): a tinted block above the
- * fields explaining the method — authored content attached to the
- * question, not hardcoded copy (CLAUDE.md rule 12). Question.helpText
- * already exists; this just gives it the visual weight the spec calls for
- * instead of a plain line of body text easy to skim past.
+ * A tinted block above the fields explaining the method — authored
+ * content attached to the question, not hardcoded copy (CLAUDE.md rule
+ * 12). Question.helpText already exists; this just gives it the visual
+ * weight to avoid reading as a plain line of body text easy to skim past.
  */
 export function GuidanceBanner({ children }: { children: React.ReactNode }) {
   return (
