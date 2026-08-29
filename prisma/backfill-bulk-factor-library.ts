@@ -365,14 +365,18 @@ async function main() {
   assertNoCollisions();
   console.log(`Generated ${rows.length} candidate rows (DEFRA_BULK: ${rows.filter((r) => r.set === 'DEFRA_BULK').length}, EPA_BULK: ${rows.filter((r) => r.set === 'EPA_BULK').length}).`);
 
+  // `name` deliberately excludes the publisher — the page renders
+  // `{set.publisher} — {set.name}`, so including it here doubles up
+  // ("DEFRA — DEFRA — ..."). Matches the curated sets' own convention
+  // (publisher: 'DEFRA', name: 'UK Government GHG Conversion Factors').
   const setDefs = {
     DEFRA_BULK: {
-      publisher: 'DEFRA', name: 'DEFRA — Extended Reference Library', version: '2026-bulk-v1',
+      publisher: 'DEFRA', name: 'Extended Reference Library', version: '2026-bulk-v1',
       publishedOn: new Date('2026-01-01'), regionScope: 'GLOBAL', licence: 'Open Government Licence v3.0 (structure only)',
       sourceUrl: 'https://www.gov.uk/government/collections/government-conversion-factors-for-company-reporting',
     },
     EPA_BULK: {
-      publisher: 'EPA', name: 'EPA — Extended Reference Library', version: '2026-bulk-v1',
+      publisher: 'EPA', name: 'Extended Reference Library', version: '2026-bulk-v1',
       publishedOn: new Date('2026-01-01'), regionScope: 'US', licence: 'US Government Work (public domain, structure only)',
       sourceUrl: 'https://www.epa.gov/climateleadership/ghg-emission-factors-hub',
     },

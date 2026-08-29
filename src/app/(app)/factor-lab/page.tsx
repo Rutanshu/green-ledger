@@ -24,14 +24,16 @@ export default async function FactorLabPage() {
   const db = orgScopedClient(org.id);
 
   // A reference library can hold far more factors than anyone would ever
-  // scroll through — capped per set so this page stays fast and readable
-  // regardless of library size; _count carries the true total for the
-  // "showing N of M" note below.
+  // scroll through, and most of that volume is prior-year vintages of the
+  // same fuel/material (validTo set once superseded) — capped to the
+  // CURRENT vintage only (validTo: null) so the preview shows one row per
+  // fuel/material rather than 20 near-identical rows for every year back
+  // to 2005. _count carries the true all-years total for the note below.
   const FACTORS_PER_SET_CAP = 200;
   const [factorSets, template, labelOverrides] = await Promise.all([
     db.emissionFactorSet.findMany({
       include: {
-        factors: { orderBy: { fuelOrMaterialCode: "asc" }, take: FACTORS_PER_SET_CAP },
+        factors: { where: { validTo: null }, orderBy: { fuelOrMaterialCode: "asc" }, take: FACTORS_PER_SET_CAP },
         _count: { select: { factors: true } },
       },
       orderBy: { publisher: "asc" },
@@ -110,8 +112,8 @@ export default async function FactorLabPage() {
                 {set.publisher} — {set.name} <span className="font-normal text-muted">{set.version}</span>
               </div>
               <div className="mt-0.5 text-[13px] text-ink2">
-                {set.regionScope} · {set.licence} · {set._count.factors.toLocaleString()} factors
-                {set._count.factors > FACTORS_PER_SET_CAP && ` (showing first ${FACTORS_PER_SET_CAP})`}
+                {set.regionScope} · {set.licence} · {set._count.factors.toLocaleString()} factors across all years
+                {set._count.factors > FACTORS_PER_SET_CAP && ` — showing up to ${FACTORS_PER_SET_CAP} current (${new Date().getFullYear()}) rows, one per fuel/material`}
               </div>
             </div>
             <table className="w-full text-[13px]">
@@ -120,6 +122,7 @@ export default async function FactorLabPage() {
                   <th className="px-4 py-2">Fuel / material</th>
                   <th className="px-4 py-2">Activity</th>
                   <th className="px-4 py-2">Region</th>
+                  <th className="px-4 py-2">Valid from</th>
                   <th className="px-4 py-2">Value</th>
                   <th className="px-4 py-2">Unit</th>
                 </tr>
@@ -132,6 +135,7 @@ export default async function FactorLabPage() {
                       <Label entityKind="ACTIVITY_TYPE" code={f.activityType} overrides={labelOverrides} showInfo />
                     </td>
                     <td className="px-4 py-2 text-ink2">{f.region}</td>
+                    <td className="px-4 py-2 text-ink2">{f.validFrom.toISOString().slice(0, 10)}</td>
                     <td className="px-4 py-2 text-ink2">{Number(f.value).toLocaleString()}</td>
                     <td className="px-4 py-2 text-ink2 font-mono text-xs">
                       {f.unitNumerator}/{f.unitDenominator}
