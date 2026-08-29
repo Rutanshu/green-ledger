@@ -282,7 +282,7 @@ export const DEMO_TEMPLATE: { name: string; sections: SeedSection[] } = {
       questions: [
         { code: 'raw_materials_spend', label: 'Total spend on raw materials at this site',
           helpText: 'A spend-based estimate. Replace with supplier-specific data when you have it.',
-          unitDim: 'CURRENCY', allowedUnits: ['GBP'],
+          unitDim: 'CURRENCY', allowedUnits: ['GBP'], visibleIf: { not: { site_country_in: ['US'] } },
           binding: { scope: 'SCOPE_3', activityType: 'SPEND', method: 'SPEND_BASED', fuel: 'raw_materials', cat: 1 } },
         // deliberately BROKEN so the Factor Lab has something to show
         { code: 'cleaning_spend', label: 'Total spend on contract cleaning at this site',
@@ -290,7 +290,7 @@ export const DEMO_TEMPLATE: { name: string; sections: SeedSection[] } = {
           binding: { scope: 'SCOPE_3', activityType: 'SPEND', method: 'SPEND_BASED', fuel: 'cleaning_services', cat: 1 } },
         { code: 'raw_materials_spend_usd', label: 'Total spend on raw materials at this site (USD)',
           helpText: 'For sites reporting in US dollars. A spend-based estimate.',
-          unitDim: 'CURRENCY', allowedUnits: ['USD'], required: false,
+          unitDim: 'CURRENCY', allowedUnits: ['USD'], visibleIf: { site_country_in: ['US'] },
           binding: { scope: 'SCOPE_3', activityType: 'SPEND', method: 'SPEND_BASED', fuel: 'raw_materials', cat: 1 } },
       ],
     },
