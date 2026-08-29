@@ -8,6 +8,7 @@ import { CalculationBreakdown } from "@/components/CalculationBreakdown";
 import { AssignmentWorkflow } from "../data-collection/AssignmentWorkflow";
 import { RuleViolationsPanel } from "../data-collection/RuleViolationsPanel";
 import { CorrectionRequestForm } from "./CorrectionRequestForm";
+import { UnlockPositionValueForm } from "./UnlockPositionValueForm";
 import { Denied } from "../_components/Denied";
 
 export const dynamic = "force-dynamic";
@@ -25,13 +26,18 @@ export default async function ReviewPage() {
   const sites = await db.site.findMany({
     orderBy: { code: "asc" },
     include: {
+      // APPROVED stays visible here too — not for the approve action (AssignmentWorkflow
+      // shows nothing once approved) but so a manager can unlock an individual locked
+      // answer without having to hunt through Overview/Progress for it.
       assignments: {
-        where: { status: "IN_REVIEW" },
+        where: { status: { in: ["IN_REVIEW", "APPROVED"] } },
         include: { template: { include: { sections: { include: { questions: true } } } }, period: true },
       },
     },
   });
   const inReview = sites.filter((s) => s.assignments.length > 0);
+  const waitingCount = inReview.filter((s) => s.assignments[0].status === "IN_REVIEW").length;
+  const lockedCount = inReview.length - waitingCount;
 
   const positionValues = await db.positionValue.findMany({
     where: { siteId: { in: inReview.map((s) => s.id) } },
@@ -64,7 +70,9 @@ export default async function ReviewPage() {
       <p className="mt-0.5 text-[13px] text-ink2">
         {inReview.length === 0
           ? "Nothing waiting on you right now."
-          : `${inReview.length} facilit${inReview.length === 1 ? "y" : "ies"} submitted, waiting on your review.`}
+          : waitingCount === 0
+            ? `${lockedCount} facilit${lockedCount === 1 ? "y" : "ies"} approved and locked.`
+            : `${waitingCount} facilit${waitingCount === 1 ? "y" : "ies"} submitted, waiting on your review${lockedCount > 0 ? ` · ${lockedCount} approved and locked` : ""}.`}
       </p>
 
       <div className="mt-5 flex flex-col gap-4">
@@ -111,7 +119,14 @@ export default async function ReviewPage() {
                             {v.valueNumeric?.toString()} {v.unit} · {labelText("DATA_QUALITY", v.dataQuality ?? "ESTIMATED", labelOverrides)}
                           </div>
                         </div>
-                        {v.status === "FLAGGED" && openCorrection ? (
+                        {v.status === "APPROVED" ? (
+                          <div className="flex flex-col items-end gap-1.5">
+                            <span className="whitespace-nowrap rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
+                              approved — locked
+                            </span>
+                            {canApprove && <UnlockPositionValueForm positionValueId={v.id} />}
+                          </div>
+                        ) : v.status === "FLAGGED" && openCorrection ? (
                           <span className="whitespace-nowrap rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
                             sent back: {openCorrection.note}
                           </span>

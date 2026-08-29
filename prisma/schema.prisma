@@ -563,6 +563,10 @@ model Site {
   @@unique([organizationId, code])
   @@index([organizationId, siteType])
   @@index([organizationId, parentSiteId])
+  /// Powers the descendant roll-up query ($1 = ANY(path)) in reports/
+  /// actions.ts. Declared here (not just raw SQL in the migration) so
+  /// `prisma migrate dev`'s diff stops proposing to drop it as drift.
+  @@index([path], type: Gin, map: "sites_path_gin_idx")
   @@map("sites")
 }
 
@@ -1536,6 +1540,18 @@ model PositionValue {
   status            AnswerStatus @default(UNANSWERED)
   answeredById      String?      @map("answered_by_id")
   answeredAt        DateTime?    @map("answered_at")
+  /// Set when an assignment approval sweeps this value to APPROVED —
+  /// distinct from answeredById/At, which stay pointing at who actually
+  /// typed the value. Cleared (not carried forward) on unlock; the
+  /// pre-unlock audit event is where "who approved this before" lives.
+  approvedById      String?      @map("approved_by_id")
+  approvedAt        DateTime?    @map("approved_at")
+  /// Set only by a manager's single-answer unlock (review/actions.ts) —
+  /// distinct from ReportingPeriod's own unlockReason, which is for the
+  /// separate whole-period restatement flow.
+  unlockReason      String?      @map("unlock_reason")
+  unlockedAt        DateTime?    @map("unlocked_at")
+  unlockedById      String?      @map("unlocked_by_id")
   documentIds       String[]     @map("document_ids")
   comment           String?
   priorPeriodValue  Decimal?     @map("prior_period_value") @db.Decimal(20, 6)

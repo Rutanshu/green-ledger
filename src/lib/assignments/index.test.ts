@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { assertCompleteForSubmission, IllegalAssignmentTransitionError, IncompleteAssignmentError, transitionAssignment } from "./index";
+import {
+  assertCompleteForSubmission, assertHasReleasableAnswers, IllegalAssignmentTransitionError,
+  IncompleteAssignmentError, NothingToReleaseError, transitionAssignment,
+} from "./index";
 
 describe("transitionAssignment", () => {
   it("walks the happy path NOT_STARTED -> IN_PROGRESS -> IN_REVIEW -> APPROVED -> LOCKED", () => {
@@ -17,8 +20,21 @@ describe("transitionAssignment", () => {
   it("throws on LOCKED -> anything (terminal)", () => {
     expect(() => transitionAssignment("LOCKED", "APPROVED")).toThrow(IllegalAssignmentTransitionError);
   });
-  it("throws APPROVED -> IN_REVIEW (no going back once approved)", () => {
-    expect(() => transitionAssignment("APPROVED", "IN_REVIEW")).toThrow(IllegalAssignmentTransitionError);
+  it("allows APPROVED -> IN_REVIEW (a manager unlocking one previously-approved answer bounces the assignment back)", () => {
+    expect(transitionAssignment("APPROVED", "IN_REVIEW")).toBe("IN_REVIEW");
+  });
+  it("still refuses APPROVED -> IN_PROGRESS or NOT_STARTED (only the review bounce-back is allowed)", () => {
+    expect(() => transitionAssignment("APPROVED", "IN_PROGRESS")).toThrow(IllegalAssignmentTransitionError);
+    expect(() => transitionAssignment("APPROVED", "NOT_STARTED")).toThrow(IllegalAssignmentTransitionError);
+  });
+});
+
+describe("assertHasReleasableAnswers", () => {
+  it("passes when at least one question has been answered", () => {
+    expect(() => assertHasReleasableAnswers(1)).not.toThrow();
+  });
+  it("throws NothingToReleaseError at zero", () => {
+    expect(() => assertHasReleasableAnswers(0)).toThrow(NothingToReleaseError);
   });
 });
 

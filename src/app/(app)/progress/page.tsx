@@ -64,7 +64,7 @@ export default async function ProgressPage() {
       : [];
     const answered = questions.filter((q) => {
       const v = valueByKey.get(`${site.id}:${assignment!.reportingPeriodId}:${q.code}`);
-      return v?.status === "ANSWERED";
+      return v?.status === "ANSWERED" || v?.status === "APPROVED";
     });
     const outstanding = questions.filter((q) => !answered.includes(q));
     return { site, assignment, total: questions.length, answered: answered.length, outstanding };

@@ -25,12 +25,28 @@ export class IncompleteAssignmentError extends Error {
   }
 }
 
-/** IN_REVIEW can bounce back to IN_PROGRESS (sent back for changes) as well as forward to APPROVED. Everything else moves one step at a time. */
+export class NothingToReleaseError extends Error {
+  constructor() {
+    super("Nothing has been answered yet — there's nothing to release for review.");
+    this.name = "NothingToReleaseError";
+  }
+}
+
+/**
+ * IN_REVIEW can bounce back to IN_PROGRESS (sent back for changes) as
+ * well as forward to APPROVED. APPROVED can bounce back to IN_REVIEW
+ * too — not a normal step, only reachable via a manager's single-answer
+ * unlock (review/actions.ts unlockPositionValue), which needs the
+ * assignment to land somewhere review/page.tsx already queries for
+ * (status: "IN_REVIEW") rather than inventing a new status value for a
+ * "mostly approved, one field reopened" state. Everything else moves one
+ * step at a time.
+ */
 const ALLOWED_TRANSITIONS: Record<AssignmentStatus, readonly AssignmentStatus[]> = {
   NOT_STARTED: ["IN_PROGRESS"],
   IN_PROGRESS: ["IN_REVIEW"],
   IN_REVIEW: ["IN_PROGRESS", "APPROVED"],
-  APPROVED: ["LOCKED"],
+  APPROVED: ["LOCKED", "IN_REVIEW"],
   LOCKED: [],
 };
 
@@ -39,7 +55,19 @@ export function transitionAssignment(from: AssignmentStatus, to: AssignmentStatu
   return to;
 }
 
-/** Submitting for review requires 100% completeness — never a partial submission silently accepted. */
+/** A FULL submission requires 100% completeness — never a partial submission silently accepted as complete. */
 export function assertCompleteForSubmission(completenessPct: number): void {
   if (completenessPct < 100) throw new IncompleteAssignmentError(completenessPct);
+}
+
+/**
+ * A PARTIAL release ("release what's ready") only requires that
+ * something has actually been answered — the assignment still moves to
+ * IN_REVIEW, but stays honestly short of 100% until the rest is
+ * answered and re-released. review/page.tsx's own per-answer status
+ * (draft/answered/approved) is what tells a reviewer it was partial, not
+ * this check.
+ */
+export function assertHasReleasableAnswers(answeredCount: number): void {
+  if (answeredCount <= 0) throw new NothingToReleaseError();
 }

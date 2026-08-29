@@ -198,9 +198,10 @@ export function EnterDataWizard({ sites, labelOverrides }: { sites: WizardSite[]
               >
                 <div>
                   <div className="text-[14.5px] font-medium">{formatQuestionLabel(q.label, site.periodLabel)}</div>
-                  {q.existing?.status === "ANSWERED" && (
+                  {(q.existing?.status === "ANSWERED" || q.existing?.status === "APPROVED") && (
                     <div className="text-[12.5px] text-good">
-                      already entered: {q.existing.value} {q.existing.unit}
+                      {q.existing.status === "APPROVED" ? "approved — locked: " : "already entered: "}
+                      {q.existing.value} {q.existing.unit}
                     </div>
                   )}
                   {q.existing?.status === "DRAFT" && <div className="text-[12.5px] text-warn">draft saved</div>}

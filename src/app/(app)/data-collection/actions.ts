@@ -13,7 +13,8 @@ import { recordAudit } from "@/lib/audit";
 import { assertPeriodWritable, PeriodLockedError } from "@/lib/periods";
 import { evaluateRule, InvalidRuleConditionError, type RuleConfig, type RuleEvalContext } from "@/lib/rules";
 import { assertFreshWrite, StaleWriteError } from "@/lib/concurrency";
-import { assertCompleteForSubmission, IncompleteAssignmentError, transitionAssignment, IllegalAssignmentTransitionError, type AssignmentStatus } from "@/lib/assignments";
+import { assertCompleteForSubmission, assertHasReleasableAnswers, IncompleteAssignmentError, NothingToReleaseError, transitionAssignment, IllegalAssignmentTransitionError, type AssignmentStatus } from "@/lib/assignments";
+import { assertPositionValueWritable, PositionValueLockedError } from "@/lib/positions/valueWritable";
 import { assertDistinctApprover, SelfApprovalError } from "@/lib/workflow/fourEyes";
 import { can, ROLE_LABEL } from "@/lib/auth/permissions";
 import { resolveOrCreatePosition } from "@/lib/positions/resolveOrCreate";
@@ -171,6 +172,7 @@ export async function submitAnswer(_prev: SubmitAnswerState, formData: FormData)
 
     const positionValueKey = { positionId_siteId_reportingPeriodId_line: { positionId: position.id, siteId: assignment.siteId, reportingPeriodId: assignment.reportingPeriodId, line: 1 } } as const;
     const beforePositionValue = await tx.positionValue.findUnique({ where: positionValueKey });
+    assertPositionValueWritable(beforePositionValue?.status);
     assertFreshWrite(expectedUpdatedAt || null, beforePositionValue?.updatedAt.toISOString() ?? null);
     const positionValue = await tx.positionValue.upsert({
       where: positionValueKey,
@@ -324,9 +326,14 @@ export async function submitAnswer(_prev: SubmitAnswerState, formData: FormData)
       },
       include: { position: true },
     });
+    // APPROVED counts toward completeness too, not just ANSWERED — an
+    // approved answer stays satisfied, it just isn't the reason a fresh
+    // submission is being made. Without this, approving an assignment
+    // would make its own completeness figure collapse the moment
+    // approveAssignment starts actually setting PositionValue.status.
     const satisfied = new Set(
       siblingValues
-        .filter((v) => v.status === "ANSWERED")
+        .filter((v) => v.status === "ANSWERED" || v.status === "APPROVED")
         .map((v) => questionIdByPositionCode.get(v.position.positionCode))
         .filter((id): id is string => !!id),
     );
@@ -433,6 +440,7 @@ export async function submitAnswer(_prev: SubmitAnswerState, formData: FormData)
     // directly: 2.4s cold vs 0.2s warm for a single query.
     if (e instanceof RuleBlockedError) return { blocked: e.message } as const;
     if (e instanceof StaleWriteError) return { blocked: e.message } as const;
+    if (e instanceof PositionValueLockedError) return { blocked: e.message } as const;
     throw e;
   });
   if ("blocked" in result) return { ok: false, error: result.blocked };
@@ -477,10 +485,17 @@ type WorkflowState = { ok: boolean; error?: string } | null;
 
 /**
  * NOT_STARTED/IN_PROGRESS -> IN_REVIEW. GHG_TOOL_ARCHITECTURE.md §8.3,
- * BUILD_PLAN Step 3.2: submission is refused below 100% completeness —
- * never a silent partial submit.
+ * BUILD_PLAN Step 3.2: a FULL submission is refused below 100%
+ * completeness — never a silent partial submit passed off as complete.
+ *
+ * `partial: true` is the other release path: "release what's ready" —
+ * skips the 100% gate, only requires that something has actually been
+ * answered (assertHasReleasableAnswers). The assignment still moves to
+ * IN_REVIEW either way; what's honestly different is completenessPct,
+ * which review/page.tsx's per-answer status already makes visible to
+ * the reviewer rather than this action needing to say "partial" itself.
  */
-export async function submitAssignment(assignmentId: string): Promise<WorkflowState> {
+export async function submitAssignment(assignmentId: string, opts?: { partial?: boolean }): Promise<WorkflowState> {
   const membership = await getCurrentMembership();
   if (!membership) return { ok: false, error: "Not signed in." };
   if (!can(membership.role, "submit_answers")) {
@@ -493,10 +508,19 @@ export async function submitAssignment(assignmentId: string): Promise<WorkflowSt
   if (!assignment) return { ok: false, error: "Assignment not found." };
 
   try {
-    assertCompleteForSubmission(Number(assignment.completenessPct));
+    if (opts?.partial) {
+      const answeredCount = await db.positionValue.count({
+        where: { siteId: assignment.siteId, reportingPeriodId: assignment.reportingPeriodId, status: { in: ["ANSWERED", "APPROVED"] } },
+      });
+      assertHasReleasableAnswers(answeredCount);
+    } else {
+      assertCompleteForSubmission(Number(assignment.completenessPct));
+    }
     transitionAssignment(assignment.status as AssignmentStatus, "IN_REVIEW");
   } catch (e) {
-    if (e instanceof IncompleteAssignmentError || e instanceof IllegalAssignmentTransitionError) return { ok: false, error: e.message };
+    if (e instanceof IncompleteAssignmentError || e instanceof NothingToReleaseError || e instanceof IllegalAssignmentTransitionError) {
+      return { ok: false, error: e.message };
+    }
     throw e;
   }
 
@@ -526,6 +550,14 @@ export async function submitAssignment(assignmentId: string): Promise<WorkflowSt
  * IN_REVIEW -> APPROVED. Four-eyes: the approver must be a different
  * person from whoever submitted it (lib/workflow/fourEyes.ts) — enforced
  * here, server-side, not just hidden in the UI.
+ *
+ * Also sweeps every ANSWERED PositionValue in the assignment to APPROVED
+ * — previously this action only flipped QuestionnaireAssignment.status,
+ * never touched PositionValue at all, so "approved" data could still be
+ * silently overwritten by submitAnswer as long as the reporting period
+ * itself wasn't locked. Refuses outright if anything is still FLAGGED
+ * (an open correction request) — approving shouldn't be able to sweep a
+ * value mid-correction into looking settled.
  */
 export async function approveAssignment(assignmentId: string): Promise<WorkflowState> {
   const membership = await getCurrentMembership();
@@ -547,6 +579,14 @@ export async function approveAssignment(assignmentId: string): Promise<WorkflowS
     throw e;
   }
 
+  const positionValues = await db.positionValue.findMany({
+    where: { siteId: assignment.siteId, reportingPeriodId: assignment.reportingPeriodId },
+  });
+  if (positionValues.some((v) => v.status === "FLAGGED")) {
+    return { ok: false, error: "One or more answers are flagged for correction — resolve those first." };
+  }
+  const toApprove = positionValues.filter((v) => v.status === "ANSWERED");
+
   const escapedOrgId = org.id.replace(/'/g, "''");
   await rawPrisma.$transaction(async (tx) => {
     await tx.$executeRawUnsafe(`SET LOCAL app.org_id = '${escapedOrgId}'`);
@@ -563,9 +603,27 @@ export async function approveAssignment(assignmentId: string): Promise<WorkflowS
       before: assignment,
       after: updated,
     });
+
+    for (const before of toApprove) {
+      const after = await tx.positionValue.update({
+        where: { id: before.id },
+        data: { status: "APPROVED", approvedById: membership.user.id, approvedAt: new Date() },
+      });
+      await recordAudit(tx, {
+        organizationId: org.id,
+        actorUserId: membership.user.id,
+        action: "APPROVE",
+        entityType: "PositionValue",
+        entityId: before.id,
+        before,
+        after,
+      });
+    }
   });
 
   revalidatePath("/data-collection");
+  revalidatePath("/review");
+  revalidatePath("/progress");
   return { ok: true };
 }
 
