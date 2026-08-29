@@ -15,8 +15,19 @@ export async function retestBinding(bindingId: string) {
   const org = membership.org;
   const db = orgScopedClient(org.id);
 
+  // A binding is on EITHER a Question (legacy) or a Position (current) —
+  // filtering only through `question` meant this silently no-op'd (found
+  // nothing, returned early) for every Position-bound binding. Position
+  // carries organizationId directly, so that leg doesn't need the same
+  // nested-relation path the Question leg does.
   const binding = await db.factorBinding.findFirst({
-    where: { id: bindingId, question: { section: { template: { organizationId: org.id } } } },
+    where: {
+      id: bindingId,
+      OR: [
+        { question: { section: { template: { organizationId: org.id } } } },
+        { position: { organizationId: org.id } },
+      ],
+    },
   });
   if (!binding) return;
 

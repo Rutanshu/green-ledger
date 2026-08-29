@@ -41,16 +41,34 @@ export default async function FactorLabPage() {
     db.questionnaireTemplate.findFirst({
       where: { status: "PUBLISHED" },
       include: {
-        sections: { include: { questions: { include: { binding: true } } } },
+        sections: {
+          include: {
+            questions: { include: { binding: true } },
+            items: { include: { position: { include: { binding: true } } } },
+          },
+        },
       },
     }),
     getOrgLabelOverrides(org.id),
   ]);
 
-  const bindings = (template?.sections ?? [])
+  // A binding is on EITHER a Question (legacy) or a Position (current) —
+  // this page used to only look at the Question side, so a Position-bound
+  // binding never showed up here and its "Test binding" button (which
+  // looks bindings up the same way) silently did nothing. A position
+  // referenced from several sections is deduped by position id, same rule
+  // publishTemplate() already uses when it snapshots bindings.
+  const questionBindings = (template?.sections ?? [])
     .flatMap((s) => s.questions)
-    .filter((q) => q.binding !== null)
-    .map((q) => ({ question: q, binding: q.binding! }));
+    .filter((q): q is typeof q & { binding: NonNullable<typeof q.binding> } => q.binding !== null)
+    .map((q) => ({ code: q.code, binding: q.binding }));
+  const positionBindings = [...new Map(
+    (template?.sections ?? [])
+      .flatMap((s) => s.items)
+      .filter((i): i is typeof i & { position: typeof i.position & { binding: NonNullable<typeof i.position.binding> } } => i.position.binding !== null)
+      .map((i) => [i.position.id, { code: i.position.positionCode, binding: i.position.binding }] as const),
+  ).values()];
+  const bindings = [...questionBindings, ...positionBindings];
 
   return (
     <>
@@ -72,9 +90,9 @@ export default async function FactorLabPage() {
             </tr>
           </thead>
           <tbody>
-            {bindings.map(({ question, binding }) => (
+            {bindings.map(({ code, binding }) => (
               <tr key={binding.id} className="border-b border-grid last:border-0">
-                <td className="px-4 py-2.5 font-medium">{question.code}</td>
+                <td className="px-4 py-2.5 font-medium">{code}</td>
                 <td className="px-4 py-2.5 text-ink2">
                   <Label entityKind="ACTIVITY_TYPE" code={binding.activityType} overrides={labelOverrides} showInfo />
                 </td>
