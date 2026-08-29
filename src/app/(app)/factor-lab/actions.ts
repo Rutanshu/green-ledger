@@ -21,7 +21,8 @@ export async function retestBinding(bindingId: string) {
   if (!binding) return;
 
   const [factorSets, site] = await Promise.all([
-    db.emissionFactorSet.findMany({ include: { factors: true } }),
+    // Scoped to this one binding's fuel — see data-collection/actions.ts.
+    db.emissionFactorSet.findMany({ include: { factors: { where: { fuelOrMaterialCode: binding.fuelOrMaterialCode } } } }),
     db.site.findFirst({ orderBy: { code: "asc" } }),
   ]);
   if (!site) return;

@@ -23,9 +23,17 @@ export default async function FactorLabPage() {
   const canManage = can(membership.role, "manage_factors");
   const db = orgScopedClient(org.id);
 
+  // A reference library can hold far more factors than anyone would ever
+  // scroll through — capped per set so this page stays fast and readable
+  // regardless of library size; _count carries the true total for the
+  // "showing N of M" note below.
+  const FACTORS_PER_SET_CAP = 200;
   const [factorSets, template, labelOverrides] = await Promise.all([
     db.emissionFactorSet.findMany({
-      include: { factors: { orderBy: { fuelOrMaterialCode: "asc" } } },
+      include: {
+        factors: { orderBy: { fuelOrMaterialCode: "asc" }, take: FACTORS_PER_SET_CAP },
+        _count: { select: { factors: true } },
+      },
       orderBy: { publisher: "asc" },
     }),
     db.questionnaireTemplate.findFirst({
@@ -102,7 +110,8 @@ export default async function FactorLabPage() {
                 {set.publisher} — {set.name} <span className="font-normal text-muted">{set.version}</span>
               </div>
               <div className="mt-0.5 text-[13px] text-ink2">
-                {set.regionScope} · {set.licence} · {set.factors.length} factors
+                {set.regionScope} · {set.licence} · {set._count.factors.toLocaleString()} factors
+                {set._count.factors > FACTORS_PER_SET_CAP && ` (showing first ${FACTORS_PER_SET_CAP})`}
               </div>
             </div>
             <table className="w-full text-[13px]">
