@@ -1,5 +1,7 @@
-import { getCurrentOrg } from "@/lib/demo-org";
+import { getCurrentMembership } from "@/lib/demo-org";
 import { orgScopedClient } from "@/lib/db/tenant";
+import { can } from "@/lib/auth/permissions";
+import { CreateSiteForm } from "./CreateSiteForm";
 
 export const dynamic = "force-dynamic";
 
@@ -10,19 +12,30 @@ const ASSET_STATUS_STYLE: Record<string, string> = {
 };
 
 export default async function SitesPage() {
-  const org = await getCurrentOrg();
-  if (!org) return null;
+  const membership = await getCurrentMembership();
+  if (!membership) return null;
+  const org = membership.org;
+  const canManage = can(membership.role, "manage_sites");
   const db = orgScopedClient(org.id);
 
-  const sites = await db.site.findMany({
-    include: { assets: { orderBy: { name: "asc" } } },
-    orderBy: { code: "asc" },
-  });
+  const [sites, siteTypeEntries] = await Promise.all([
+    db.site.findMany({
+      include: { assets: { orderBy: { name: "asc" } } },
+      orderBy: { code: "asc" },
+    }),
+    db.vocabularyEntry.findMany({ where: { kind: "SITE_TYPE" }, orderBy: { label: "asc" } }),
+  ]);
+  const siteTypes = siteTypeEntries.map((e) => ({ code: e.code, label: e.label }));
 
   return (
     <>
-      <h1 className="text-xl font-semibold">Sites</h1>
-      <p className="mt-0.5 text-[13px] text-ink2">{sites.length} sites in this organisation.</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold">Facilities</h1>
+          <p className="mt-0.5 text-[13px] text-ink2">{sites.length} facilities in this organisation.</p>
+        </div>
+        {canManage && <CreateSiteForm siteTypes={siteTypes} />}
+      </div>
 
       <div className="mt-5 flex flex-col gap-4">
         {sites.map((site) => (

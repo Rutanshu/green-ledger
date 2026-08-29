@@ -324,3 +324,117 @@ export async function decideRestatementAction(restatementId: string, decision: "
   revalidatePath("/reports");
   return { ok: true };
 }
+
+export interface PeriodReadiness {
+  totalFacilities: number;
+  approvedFacilities: number;
+  openBlockingViolations: number;
+  brokenBindings: number;
+  ready: boolean;
+}
+
+/**
+ * The period-close gate — one function, used both to render the
+ * checklist and (server-side, re-checked rather than trusted from the
+ * client) to refuse lockPeriod if anything is still open. Mirrors the
+ * redesign spec's "release checklist" (imperative-coalescing-hollerith
+ * Sphera notes): every facility approved, no BLOCK-severity rule
+ * violations open, no broken/ambiguous emission-source bindings.
+ */
+async function getPeriodReadiness(db: ReturnType<typeof orgScopedClient>, periodId: string): Promise<PeriodReadiness> {
+  const assignments = await db.questionnaireAssignment.findMany({ where: { reportingPeriodId: periodId } });
+  const totalFacilities = assignments.length;
+  const approvedFacilities = assignments.filter((a) => a.status === "APPROVED" || a.status === "LOCKED").length;
+
+  const openBlockingViolations = await db.ruleViolation.count({
+    where: {
+      status: "OPEN",
+      assignmentId: { in: assignments.map((a) => a.id) },
+      rule: { severity: "BLOCK" },
+    },
+  });
+
+  const template = await db.questionnaireTemplate.findFirst({
+    where: { status: "PUBLISHED" },
+    include: { sections: { include: { questions: { include: { binding: true } } } } },
+  });
+  const brokenBindings = (template?.sections ?? [])
+    .flatMap((s) => s.questions)
+    .map((q) => q.binding)
+    .filter((b): b is NonNullable<typeof b> => b !== null)
+    .filter((b) => b.health === "BROKEN" || b.health === "AMBIGUOUS").length;
+
+  return {
+    totalFacilities,
+    approvedFacilities,
+    openBlockingViolations,
+    brokenBindings,
+    ready: totalFacilities > 0 && approvedFacilities === totalFacilities && openBlockingViolations === 0 && brokenBindings === 0,
+  };
+}
+
+export async function getPeriodReadinessAction(periodId: string): Promise<PeriodReadiness | null> {
+  const membership = await getCurrentMembership();
+  if (!membership) return null;
+  return getPeriodReadiness(orgScopedClient(membership.org.id), periodId);
+}
+
+type LockPeriodState = { ok: boolean; error?: string } | null;
+
+/**
+ * The only path that sets a period to LOCKED — there was none before
+ * this. CLAUDE.md rule 8 ("locked periods are immutable") and the
+ * restatement flow both assume a period can actually reach LOCKED;
+ * nothing in the product could get it there. No unlock action exists
+ * deliberately — corrections go through restatement once locked.
+ */
+export async function lockPeriod(_prev: LockPeriodState, formData: FormData): Promise<LockPeriodState> {
+  const membership = await getCurrentMembership();
+  if (!membership) return { ok: false, error: "Not signed in." };
+  if (!can(membership.role, "manage_org")) {
+    return { ok: false, error: `Your role (${ROLE_LABEL[membership.role]}) can't lock a period.` };
+  }
+  const org = membership.org;
+  const periodId = String(formData.get("periodId") ?? "");
+
+  const db = orgScopedClient(org.id);
+  const period = await db.reportingPeriod.findFirst({ where: { id: periodId } });
+  if (!period) return { ok: false, error: "Period not found." };
+  if (period.status === "LOCKED" || period.status === "ASSURED") {
+    return { ok: false, error: `${period.label} is already locked.` };
+  }
+
+  const readiness = await getPeriodReadiness(db, periodId);
+  if (!readiness.ready) {
+    const reasons: string[] = [];
+    if (readiness.totalFacilities === 0) reasons.push("no facilities are assigned to this period");
+    else if (readiness.approvedFacilities < readiness.totalFacilities) {
+      reasons.push(`${readiness.totalFacilities - readiness.approvedFacilities} facilit${readiness.totalFacilities - readiness.approvedFacilities === 1 ? "y isn't" : "ies aren't"} approved yet`);
+    }
+    if (readiness.openBlockingViolations > 0) reasons.push(`${readiness.openBlockingViolations} blocking data-quality flag${readiness.openBlockingViolations === 1 ? "" : "s"} still open`);
+    if (readiness.brokenBindings > 0) reasons.push(`${readiness.brokenBindings} emission source${readiness.brokenBindings === 1 ? " has" : "s have"} no factor linked`);
+    return { ok: false, error: `Can't lock ${period.label} yet — ${reasons.join("; ")}.` };
+  }
+
+  const escapedOrgId = org.id.replace(/'/g, "''");
+  await rawPrisma.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe(`SET LOCAL app.org_id = '${escapedOrgId}'`);
+    const updated = await tx.reportingPeriod.update({
+      where: { id: periodId },
+      data: { status: "LOCKED", lockedAt: new Date(), lockedById: membership.user.id },
+    });
+    await recordAudit(tx, {
+      organizationId: org.id,
+      actorUserId: membership.user.id,
+      action: "LOCK",
+      entityType: "ReportingPeriod",
+      entityId: periodId,
+      before: period,
+      after: updated,
+    });
+  });
+
+  revalidatePath("/periods");
+  revalidatePath("/");
+  return { ok: true };
+}
