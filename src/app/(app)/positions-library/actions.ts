@@ -157,3 +157,87 @@ export async function updatePosition(_prev: ActionState, formData: FormData): Pr
   revalidatePath("/positions-library");
   return { ok: true };
 }
+
+// ---------- custom fields ----------
+
+const CustomFieldInput = z.object({
+  positionId: z.string().optional(), // omitted = "floating", available on every position
+  label: z.string().min(1, "Give the field a label."),
+  fieldType: z.enum(["TEXT", "NUMBER", "DATE", "SELECT"]),
+  options: z.string().optional(), // comma-separated, SELECT only
+  isRequired: z.enum(["true", "false"]).optional().default("false"),
+});
+
+export async function createCustomField(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const auth = await requirePositionManager();
+  if ("error" in auth) return { ok: false, error: auth.error };
+  const raw = Object.fromEntries(formData);
+  const parsed = CustomFieldInput.safeParse({ ...raw, positionId: raw.positionId || undefined, options: raw.options || undefined });
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
+  const d = parsed.data;
+  if (d.fieldType === "SELECT" && !d.options?.trim()) {
+    return { ok: false, error: "Give at least one option (comma-separated)." };
+  }
+
+  const orgId = auth.membership.org.id;
+  const db = orgScopedClient(orgId);
+
+  if (d.positionId) {
+    const position = await db.position.findFirst({ where: { id: d.positionId } });
+    if (!position) return { ok: false, error: "Position not found." };
+  }
+
+  const options = d.fieldType === "SELECT" ? d.options!.split(",").map((s) => s.trim()).filter(Boolean).map((v) => ({ code: v, label: v })) : undefined;
+
+  await withOrgTransaction(orgId, async (tx) => {
+    const field = await tx.customFieldDefinition.create({
+      data: {
+        organizationId: orgId,
+        positionId: d.positionId ?? null,
+        label: d.label,
+        fieldType: d.fieldType,
+        options: options ?? undefined,
+        isRequired: d.isRequired === "true",
+      },
+    });
+    await recordAudit(tx, {
+      organizationId: orgId,
+      actorUserId: auth.membership.user.id,
+      action: "CREATE",
+      entityType: "CustomFieldDefinition",
+      entityId: field.id,
+      after: field,
+    });
+  });
+
+  revalidatePath("/positions-library");
+  return { ok: true };
+}
+
+export async function deleteCustomField(customFieldId: string) {
+  const auth = await requirePositionManager();
+  if ("error" in auth) return;
+  const orgId = auth.membership.org.id;
+  const db = orgScopedClient(orgId);
+
+  const field = await db.customFieldDefinition.findFirst({
+    where: { id: customFieldId },
+    include: { values: { take: 1 } },
+  });
+  if (!field) return;
+  if (field.values.length > 0) return; // has real answers — refuse silently, UI hides the button in this case
+
+  await withOrgTransaction(orgId, async (tx) => {
+    await tx.customFieldDefinition.delete({ where: { id: customFieldId } });
+    await recordAudit(tx, {
+      organizationId: orgId,
+      actorUserId: auth.membership.user.id,
+      action: "DELETE",
+      entityType: "CustomFieldDefinition",
+      entityId: customFieldId,
+      before: field,
+    });
+  });
+
+  revalidatePath("/positions-library");
+}

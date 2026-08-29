@@ -43,6 +43,20 @@ export default async function DataCollectionPage() {
   });
   const valueByKey = new Map(positionValues.map((v) => [`${v.siteId}:${v.reportingPeriodId}:${v.position.positionCode}`, v]));
 
+  // Custom fields: org-wide defs (each either "floating" — offered on
+  // every position — or scoped to one), joined here by position code
+  // since Question and Position share the same code space. Existing
+  // values keyed the same way positionValues are above.
+  const [allPositions, customFieldDefs, customFieldValues] = await Promise.all([
+    db.position.findMany({ select: { id: true, positionCode: true } }),
+    db.customFieldDefinition.findMany({ orderBy: { sortOrder: "asc" } }),
+    db.customFieldValue.findMany({ where: { siteId: { in: sites.map((s) => s.id) } } }),
+  ]);
+  const positionIdByCode = new Map(allPositions.map((p) => [p.positionCode, p.id]));
+  const customFieldValueByKey = new Map(
+    customFieldValues.map((v) => [`${v.siteId}:${v.reportingPeriodId}:${v.customFieldDefinitionId}`, v]),
+  );
+
   const ruleViolations = await db.ruleViolation.findMany({
     where: { assignmentId: { in: sites.flatMap((s) => s.assignments.map((a) => a.id)) } },
     include: { rule: true },
@@ -116,6 +130,22 @@ export default async function DataCollectionPage() {
                         const v = valueByQuestionCode(q.code);
                         const emissionRecords = v?.activityRecords.flatMap((ar) => ar.emissionRecords) ?? [];
                         const totalKg = emissionRecords.reduce((sum, r) => sum + Number(r.emissionsKgCo2e), 0);
+                        const positionId = positionIdByCode.get(q.code);
+                        const applicableCustomFields = customFieldDefs
+                          .filter((f) => f.positionId === null || f.positionId === positionId)
+                          .map((f) => {
+                            const existingValue = assignment
+                              ? customFieldValueByKey.get(`${site.id}:${assignment.reportingPeriodId}:${f.id}`)
+                              : undefined;
+                            return {
+                              id: f.id,
+                              label: f.label,
+                              fieldType: f.fieldType,
+                              options: (f.options as { code: string; label: string }[] | null) ?? [],
+                              isRequired: f.isRequired,
+                              existingValue: existingValue?.valueText ?? existingValue?.valueNumeric?.toString() ?? existingValue?.valueDate?.toISOString().slice(0, 10) ?? "",
+                            };
+                          });
                         return (
                           <AnswerRow
                             key={q.id}
@@ -127,6 +157,7 @@ export default async function DataCollectionPage() {
                             existingEmissionsKg={emissionRecords.length > 0 ? totalKg.toString() : null}
                             canEdit={canEdit}
                             labelOverrides={labelOverrides}
+                            customFields={applicableCustomFields}
                           />
                         );
                       })}

@@ -416,29 +416,30 @@ model Organization {
   createdAt             DateTime              @default(now()) @map("created_at")
   updatedAt             DateTime              @updatedAt @map("updated_at")
 
-  memberships        Membership[]
-  sites              Site[]
-  periods            ReportingPeriod[]
-  factorSets         EmissionFactorSet[]
-  templates          QuestionnaireTemplate[]
-  documents          Document[]
-  tasks              Task[]
-  auditEvents        AuditEvent[]
-  targets            Target[]
-  reports            Report[]
-  labelOverrides     LabelOverride[]
-  vocabulary         VocabularyEntry[]
-  fuelProperties     FuelProperty[]
-  importBatches      ImportBatch[]
-  responsibilities   Responsibility[]
-  positions          Position[]
-  entitlements       Entitlement[]
-  impactProfiles     ImpactProfile[]
-  rules              Rule[]
-  ruleViolations     RuleViolation[]
-  correctionRequests CorrectionRequest[]
-  restatements       Restatement[]
-  mappingProfiles    MappingProfile[]
+  memberships            Membership[]
+  sites                  Site[]
+  periods                ReportingPeriod[]
+  factorSets             EmissionFactorSet[]
+  templates              QuestionnaireTemplate[]
+  documents              Document[]
+  tasks                  Task[]
+  auditEvents            AuditEvent[]
+  targets                Target[]
+  reports                Report[]
+  labelOverrides         LabelOverride[]
+  vocabulary             VocabularyEntry[]
+  fuelProperties         FuelProperty[]
+  importBatches          ImportBatch[]
+  responsibilities       Responsibility[]
+  positions              Position[]
+  entitlements           Entitlement[]
+  impactProfiles         ImpactProfile[]
+  rules                  Rule[]
+  ruleViolations         RuleViolation[]
+  correctionRequests     CorrectionRequest[]
+  restatements           Restatement[]
+  mappingProfiles        MappingProfile[]
+  customFieldDefinitions CustomFieldDefinition[]
 
   @@index([isSandbox, sandboxExpiresAt])
   @@map("organizations")
@@ -557,6 +558,7 @@ model Site {
   responsibilities    Responsibility[]
   positionValues      PositionValue[]
   positionAssetValues PositionAssetValue[]
+  customFieldValues   CustomFieldValue[]
 
   @@unique([organizationId, code])
   @@index([organizationId, siteType])
@@ -624,13 +626,14 @@ model ReportingPeriod {
   unlockReason       String?      @map("unlock_reason")
   createdAt          DateTime     @default(now()) @map("created_at")
 
-  organization     Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  defaultFactorSet EmissionFactorSet?        @relation(fields: [defaultFactorSetId], references: [id])
-  activityRecords  ActivityRecord[]
-  assignments      QuestionnaireAssignment[]
-  reports          Report[]
-  restatements     Restatement[]
-  positionValues   PositionValue[]
+  organization      Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  defaultFactorSet  EmissionFactorSet?        @relation(fields: [defaultFactorSetId], references: [id])
+  activityRecords   ActivityRecord[]
+  assignments       QuestionnaireAssignment[]
+  reports           Report[]
+  restatements      Restatement[]
+  positionValues    PositionValue[]
+  customFieldValues CustomFieldValue[]
 
   @@unique([organizationId, label])
   @@map("reporting_periods")
@@ -1442,17 +1445,74 @@ model Position {
   tags           String[]       @default([])
   createdAt      DateTime       @default(now()) @map("created_at")
 
-  organization Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  parent       Position?                  @relation("PositionHierarchy", fields: [parentId], references: [id])
-  children     Position[]                 @relation("PositionHierarchy")
-  values       PositionValue[]
-  assetValues  PositionAssetValue[]
-  sectionItems QuestionnaireSectionItem[]
-  binding      FactorBinding?
+  organization      Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  parent            Position?                  @relation("PositionHierarchy", fields: [parentId], references: [id])
+  children          Position[]                 @relation("PositionHierarchy")
+  values            PositionValue[]
+  assetValues       PositionAssetValue[]
+  sectionItems      QuestionnaireSectionItem[]
+  binding           FactorBinding?
+  customFields      CustomFieldDefinition[]
+  customFieldValues CustomFieldValue[]
 
   @@unique([organizationId, positionCode])
   @@index([organizationId, type])
   @@map("positions")
+}
+
+enum CustomFieldType {
+  TEXT
+  NUMBER
+  DATE
+  SELECT
+}
+
+/// A "floating" extra field any Position's answer can carry, beyond its
+/// own main value — a note, a reference number, a date, anything ad hoc
+/// that doesn't warrant its own Position. `positionId: null` means it's
+/// offered on every position in the org; set means it's scoped to one.
+model CustomFieldDefinition {
+  id             String          @id @default(uuid())
+  organizationId String          @map("organization_id")
+  positionId     String?         @map("position_id")
+  label          String
+  fieldType      CustomFieldType @map("field_type")
+  /// SELECT only — [{ "code": "...", "label": "..." }, ...]
+  options        Json?
+  isRequired     Boolean         @default(false) @map("is_required")
+  sortOrder      Int             @default(0) @map("sort_order")
+  createdAt      DateTime        @default(now()) @map("created_at")
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  position     Position?          @relation(fields: [positionId], references: [id], onDelete: Cascade)
+  values       CustomFieldValue[]
+
+  @@index([organizationId, positionId])
+  @@map("custom_field_definitions")
+}
+
+/// Keyed the same shape as PositionValue (site + period + line) so one
+/// custom field's answer lines up with the specific position answer it
+/// was collected alongside.
+model CustomFieldValue {
+  id                      String    @id @default(uuid())
+  customFieldDefinitionId String    @map("custom_field_definition_id")
+  positionId              String    @map("position_id")
+  siteId                  String    @map("site_id")
+  reportingPeriodId       String    @map("reporting_period_id")
+  line                    Int       @default(1)
+  valueText               String?   @map("value_text")
+  valueNumeric            Decimal?  @map("value_numeric") @db.Decimal(20, 6)
+  valueDate               DateTime? @map("value_date") @db.Date
+  updatedAt               DateTime  @updatedAt @map("updated_at")
+
+  definition CustomFieldDefinition @relation(fields: [customFieldDefinitionId], references: [id], onDelete: Cascade)
+  position   Position              @relation(fields: [positionId], references: [id], onDelete: Cascade)
+  site       Site                  @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  period     ReportingPeriod       @relation(fields: [reportingPeriodId], references: [id], onDelete: Cascade)
+
+  @@unique([customFieldDefinitionId, siteId, reportingPeriodId, line], map: "custom_field_values_unique_line")
+  @@map("custom_field_values")
 }
 
 /// FLOW / QUESTION / TEXT positions. `line` is reserved now for Phase E's

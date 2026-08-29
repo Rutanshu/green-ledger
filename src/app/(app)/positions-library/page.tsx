@@ -6,7 +6,8 @@ import { Denied } from "../_components/Denied";
 import { SourcesTabs } from "../_components/SourcesTabs";
 import { ScopeSubNav } from "../builder/ScopeSubNav";
 import { PositionForm } from "./PositionForm";
-import { deletePosition } from "./actions";
+import { CustomFieldForm } from "./CustomFieldForm";
+import { deletePosition, deleteCustomField } from "./actions";
 import { formatQuestionLabel } from "@/lib/labels/formatQuestionLabel";
 
 export const dynamic = "force-dynamic";
@@ -47,6 +48,11 @@ export default async function PositionsLibraryPage({ searchParams }: { searchPar
     if (key) scopeCounts[key] = (scopeCounts[key] ?? 0) + 1;
   }
   const positions = scopeFilter ? allPositions.filter((p) => positionScopeKey(p) === scopeFilter) : allPositions;
+
+  const customFields = await db.customFieldDefinition.findMany({
+    include: { position: { select: { positionCode: true } }, _count: { select: { values: true } } },
+    orderBy: { createdAt: "asc" },
+  });
 
   return (
     <>
@@ -109,6 +115,65 @@ export default async function PositionsLibraryPage({ searchParams }: { searchPar
               <tr>
                 <td colSpan={6} className="px-4 py-6 text-center text-muted">
                   No positions yet.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <h2 className="mb-2.5 mt-8 text-[14.5px] font-semibold">Custom fields</h2>
+      <p className="mt-0.5 text-[13px] text-ink2">
+        Extra ad-hoc fields collected alongside a position's main value — a note, a reference number, a date. Attach
+        one to a specific position, or leave it floating so it's offered everywhere.
+      </p>
+
+      <div className="mt-4">
+        <CustomFieldForm positions={allPositions.map((p) => ({ id: p.id, positionCode: p.positionCode }))} />
+      </div>
+
+      <div className="mt-4 overflow-x-auto rounded-[11px] glass">
+        <table className="w-full text-[13px]">
+          <thead>
+            <tr className="border-b border-grid text-left text-[11px] font-semibold uppercase tracking-wide text-muted">
+              <th className="px-4 py-2.5">Label</th>
+              <th className="px-4 py-2.5">Type</th>
+              <th className="px-4 py-2.5">Scope</th>
+              <th className="px-4 py-2.5">Values collected</th>
+              <th className="px-4 py-2.5"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {customFields.map((f) => (
+              <tr key={f.id} className="border-b border-grid last:border-0">
+                <td className="px-4 py-2.5 font-medium">
+                  {f.label}
+                  {f.isRequired && <span className="ml-1.5 text-xs text-muted">· required</span>}
+                </td>
+                <td className="px-4 py-2.5 text-ink2">{f.fieldType}</td>
+                <td className="px-4 py-2.5 text-ink2">
+                  {f.position ? (
+                    <span className="font-mono text-xs">{f.position.positionCode}</span>
+                  ) : (
+                    <span className="rounded-full bg-track px-1.5 text-accent-sky">floating — every position</span>
+                  )}
+                </td>
+                <td className="px-4 py-2.5 text-ink2">{f._count.values}</td>
+                <td className="px-4 py-2.5">
+                  {f._count.values === 0 && (
+                    <form action={deleteCustomField.bind(null, f.id)}>
+                      <button type="submit" className="text-xs text-muted hover:text-crit">
+                        Delete
+                      </button>
+                    </form>
+                  )}
+                </td>
+              </tr>
+            ))}
+            {customFields.length === 0 && (
+              <tr>
+                <td colSpan={5} className="px-4 py-6 text-center text-muted">
+                  No custom fields yet.
                 </td>
               </tr>
             )}
