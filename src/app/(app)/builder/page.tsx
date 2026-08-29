@@ -20,7 +20,7 @@ export default async function BuilderPage() {
   const db = orgScopedClient(membership.org.id);
 
   const templates = await db.questionnaireTemplate.findMany({
-    include: { sections: { include: { questions: true } } },
+    include: { sections: { include: { questions: true, items: true }, orderBy: { sortOrder: "asc" } } },
     orderBy: { createdAt: "asc" },
   });
 
@@ -43,24 +43,38 @@ export default async function BuilderPage() {
       <h2 className="mb-2.5 mt-8 text-[14.5px] font-semibold">Templates ({templates.length})</h2>
       <div className="flex flex-col gap-3">
         {templates.map((t) => {
-          const questionCount = t.sections.reduce((n, s) => n + s.questions.length, 0);
+          const questionCount = t.sections.reduce((n, s) => n + s.questions.length + s.items.length, 0);
           return (
             <Link
               key={t.id}
               href={`/builder/${t.id}`}
-              className="glass flex items-center justify-between gap-4 rounded-[11px] p-4 hover:bg-track"
+              className="glass flex flex-col gap-2.5 rounded-[11px] p-4 hover:bg-track"
             >
-              <div>
-                <div className="font-medium">
-                  {t.name} <span className="font-normal text-muted">v{t.version}</span>
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <div className="font-medium">
+                    {t.name} <span className="font-normal text-muted">v{t.version}</span>
+                  </div>
+                  <div className="mt-0.5 text-xs text-ink2">
+                    {t.sections.length} sections · {questionCount} questions
+                  </div>
                 </div>
-                <div className="mt-0.5 text-xs text-ink2">
-                  {t.sections.length} sections · {questionCount} questions
-                </div>
+                <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLE[t.status]}`}>
+                  {t.status}
+                </span>
               </div>
-              <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLE[t.status]}`}>
-                {t.status}
-              </span>
+              {t.sections.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {t.sections.map((s) => {
+                    const n = s.questions.length + s.items.length;
+                    return (
+                      <span key={s.id} className="whitespace-nowrap rounded-full bg-track px-2 py-0.5 text-[11px] text-ink2">
+                        {s.title} <span className="text-muted">({n})</span>
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
             </Link>
           );
         })}
