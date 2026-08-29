@@ -14,11 +14,12 @@ interface Site {
   code: string;
 }
 
-export function ReportWizardForm({ periods, sites }: { periods: Period[]; sites: Site[] }) {
+export function ReportWizardForm({ periods, sites, anySiteHasChildren }: { periods: Period[]; sites: Site[]; anySiteHasChildren: boolean }) {
   const [state, formAction, pending] = useActionState(generateReport, null);
   const [periodId, setPeriodId] = useState(periods[0]?.id ?? "");
   const [selectedSites, setSelectedSites] = useState<Set<string>>(new Set(sites.map((s) => s.id)));
   const [format, setFormat] = useState<"JSON" | "CSV">("JSON");
+  const [includeDescendants, setIncludeDescendants] = useState(false);
 
   const toggleSite = (id: string) => {
     setSelectedSites((prev) => {
@@ -73,6 +74,23 @@ export function ReportWizardForm({ periods, sites }: { periods: Period[]; sites:
         </div>
       </div>
 
+      {anySiteHasChildren && (
+        <label className="flex cursor-pointer items-start gap-2 text-[13px]">
+          <input
+            type="checkbox"
+            name="includeDescendants"
+            value="true"
+            checked={includeDescendants}
+            onChange={(e) => setIncludeDescendants(e.target.checked)}
+            className="mt-0.5 accent-accent"
+          />
+          <span>
+            Include facilities nested under the ones picked above.
+            <span className="block text-ink2">Never automatic — a report only ever totals exactly what you selected here.</span>
+          </span>
+        </label>
+      )}
+
       <div className="flex flex-col gap-1.5 text-[13px]">
         <span>Format</span>
         <div className="flex gap-2">
@@ -125,6 +143,16 @@ export function ReportWizardForm({ periods, sites }: { periods: Period[]; sites:
           <div className="mt-3 text-[24px] font-semibold tracking-tight">
             {state.figuresSnapshot.totalTonnes} <span className="text-sm font-medium text-ink2">tCO2e</span>
           </div>
+          {state.figuresSnapshot.expandedSiteIds.length > 0 && (
+            <div className="mt-2 text-[12px] text-ink2">
+              Includes {state.figuresSnapshot.expandedSiteIds.length} nested facilit
+              {state.figuresSnapshot.expandedSiteIds.length === 1 ? "y" : "ies"} rolled up from the ones you picked:{" "}
+              {state.figuresSnapshot.bySite
+                .filter((s) => state.figuresSnapshot.expandedSiteIds.includes(s.siteId))
+                .map((s) => s.siteName)
+                .join(", ")}
+            </div>
+          )}
           <div className="mt-3 grid grid-cols-3 gap-2 text-[13px]">
             {Object.entries(state.figuresSnapshot.byScope).map(([scope, kg]) => (
               <div key={scope} className="rounded-md border border-border bg-plane p-2.5">

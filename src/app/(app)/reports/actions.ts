@@ -14,6 +14,12 @@ const GenerateReportInput = z.object({
   siteIds: z.array(z.string()).min(1, "Choose at least one facility."),
   format: z.enum(["JSON", "CSV"]),
   acknowledgeWarnings: z.enum(["true", "false"]).optional().default("false"),
+  // Opt-in: roll up every descendant of a picked facility into the same
+  // report. Never automatic — a facility with children shouldn't silently
+  // report a bigger number than what was picked (CLAUDE.md rule 2, every
+  // number traceable). Which sites the roll-up actually pulled in gets
+  // recorded on the snapshot below, not just a bigger total.
+  includeDescendants: z.enum(["true", "false"]).optional().default("false"),
 });
 
 export type GenerateReportState =
@@ -21,7 +27,7 @@ export type GenerateReportState =
   | { ok: false; error: string; needsAcknowledgement?: boolean }
   | null;
 
-function buildSnapshot(agg: ReturnType<typeof aggregateEmissionsForReport>) {
+function buildSnapshot(agg: ReturnType<typeof aggregateEmissionsForReport>, pickedSiteIds: string[], expandedSiteIds: string[]) {
   return {
     totalKgCo2e: agg.totalKgCo2e.toString(),
     totalTonnes: agg.totalTonnes,
@@ -29,6 +35,11 @@ function buildSnapshot(agg: ReturnType<typeof aggregateEmissionsForReport>) {
     byScope3Category: Object.fromEntries(Object.entries(agg.byScope3Category).map(([k, v]) => [k, v.toString()])),
     bySite: agg.bySite.map((s) => ({ siteId: s.siteId, siteName: s.siteName, kgCo2e: s.kgCo2e.toString() })),
     recordCount: agg.recordCount,
+    // What was actually picked vs. what a descendant roll-up pulled in
+    // beyond that — disclosed explicitly rather than folded into a
+    // bigger, unexplained total.
+    pickedSiteIds,
+    expandedSiteIds,
   };
 }
 
@@ -53,14 +64,30 @@ export async function generateReport(_prev: GenerateReportState, formData: FormD
     acknowledgeWarnings: formData.get("acknowledgeWarnings") ?? "false",
   });
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
-  const { reportingPeriodId, siteIds, format, acknowledgeWarnings } = parsed.data;
+  const { reportingPeriodId, siteIds, format, acknowledgeWarnings, includeDescendants } = parsed.data;
 
   const db = orgScopedClient(org.id);
   const period = await db.reportingPeriod.findFirst({ where: { id: reportingPeriodId } });
   if (!period) return { ok: false, error: "Reporting period not found." };
 
+  // A picked site's `path` array contains the id of every one of its
+  // ancestors plus itself, so "does this site's path include a picked
+  // id" is exactly "is this site the picked one or a descendant of it" —
+  // one indexed query (see the GIN index added on Site.path), no
+  // recursive CTE.
+  let effectiveSiteIds = siteIds;
+  let expandedSiteIds: string[] = [];
+  if (includeDescendants === "true") {
+    const descendants = await db.site.findMany({
+      where: { organizationId: org.id, path: { hasSome: siteIds } },
+      select: { id: true },
+    });
+    effectiveSiteIds = [...new Set([...siteIds, ...descendants.map((d) => d.id)])];
+    expandedSiteIds = effectiveSiteIds.filter((id) => !siteIds.includes(id));
+  }
+
   const assignments = await db.questionnaireAssignment.findMany({
-    where: { reportingPeriodId, siteId: { in: siteIds }, site: { organizationId: org.id } },
+    where: { reportingPeriodId, siteId: { in: effectiveSiteIds }, site: { organizationId: org.id } },
   });
   const notApproved = assignments.filter((a) => a.status !== "APPROVED" && a.status !== "LOCKED");
   if (notApproved.length > 0) {
@@ -79,7 +106,7 @@ export async function generateReport(_prev: GenerateReportState, formData: FormD
   }
 
   const emissionRecords = await db.emissionRecord.findMany({
-    where: { activityRecord: { organizationId: org.id, reportingPeriodId, siteId: { in: siteIds } } },
+    where: { activityRecord: { organizationId: org.id, reportingPeriodId, siteId: { in: effectiveSiteIds } } },
     include: { activityRecord: { include: { site: true } } },
   });
   const rows: ReportEmissionRow[] = emissionRecords.map((r) => ({
@@ -90,7 +117,7 @@ export async function generateReport(_prev: GenerateReportState, formData: FormD
     emissionsKgCo2e: r.emissionsKgCo2e.toString(),
   }));
   const aggregate = aggregateEmissionsForReport(rows);
-  const snapshot = buildSnapshot(aggregate);
+  const snapshot = buildSnapshot(aggregate, siteIds, expandedSiteIds);
 
   const factorSetsUsed = [...new Set(emissionRecords.map((r) => r.factorSource))];
   const calcEngineVersion = emissionRecords[0]?.calcEngineVersion ?? "n/a";
@@ -116,7 +143,7 @@ export async function generateReport(_prev: GenerateReportState, formData: FormD
       action: "EXPORT",
       entityType: "Report",
       entityId: created.id,
-      after: { reportingPeriodId, siteIds, format, totalKgCo2e: snapshot.totalKgCo2e },
+      after: { reportingPeriodId, siteIds, expandedSiteIds, format, totalKgCo2e: snapshot.totalKgCo2e },
     });
     return created;
   });

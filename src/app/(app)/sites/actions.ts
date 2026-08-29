@@ -1,5 +1,6 @@
 "use server";
 
+import crypto from "node:crypto";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { getCurrentMembership } from "@/lib/demo-org";
@@ -7,6 +8,7 @@ import { orgScopedClient } from "@/lib/db/tenant";
 import { rawPrisma } from "@/lib/db/client";
 import { recordAudit } from "@/lib/audit";
 import { can, ROLE_LABEL } from "@/lib/auth/permissions";
+import { computeSitePath, SiteCycleError, SiteDepthExceededError } from "@/lib/sites";
 
 const CreateSiteInput = z.object({
   name: z.string().trim().min(1, "Give the facility a name."),
@@ -22,6 +24,7 @@ const CreateSiteInput = z.object({
     .length(2, "Use a 2-letter country code, e.g. GB.")
     .transform((s) => s.toUpperCase()),
   city: z.string().trim().optional().default(""),
+  parentSiteId: z.string().trim().optional().transform((s) => (s ? s : undefined)),
 });
 
 export type CreateSiteState = { ok: boolean; error?: string; siteId?: string } | null;
@@ -45,11 +48,31 @@ export async function createSite(_prev: CreateSiteState, formData: FormData): Pr
 
   const parsed = CreateSiteInput.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
-  const { name, code, siteType, country, city } = parsed.data;
+  const { name, code, siteType, country, city, parentSiteId } = parsed.data;
 
   const db = orgScopedClient(org.id);
   const existing = await db.site.findFirst({ where: { code } });
   if (existing) return { ok: false, error: `A facility with code "${code}" already exists.` };
+
+  // Phase C of the site-hierarchy plan: path/depth are maintained here at
+  // create time (lib/sites' computeSitePath), not derived at query time,
+  // so a descendant roll-up is one indexed `$1 = ANY(path)` query rather
+  // than a recursive CTE per report. Depth limit and self-ancestry are
+  // enforced the same way whether or not a parent is picked.
+  let parent: { id: string; path: string[] } | null = null;
+  if (parentSiteId) {
+    const parentSite = await db.site.findFirst({ where: { id: parentSiteId }, select: { id: true, path: true } });
+    if (!parentSite) return { ok: false, error: "Parent facility not found." };
+    parent = parentSite;
+  }
+  const newSiteId = crypto.randomUUID();
+  let hierarchy: { path: readonly string[]; depth: number };
+  try {
+    hierarchy = computeSitePath(newSiteId, parent);
+  } catch (e) {
+    if (e instanceof SiteDepthExceededError || e instanceof SiteCycleError) return { ok: false, error: e.message };
+    throw e;
+  }
 
   const [template, period] = await Promise.all([
     db.questionnaireTemplate.findFirst({ where: { status: "PUBLISHED" } }),
@@ -60,7 +83,18 @@ export async function createSite(_prev: CreateSiteState, formData: FormData): Pr
   const site = await rawPrisma.$transaction(async (tx) => {
     await tx.$executeRawUnsafe(`SET LOCAL app.org_id = '${escapedOrgId}'`);
     const created = await tx.site.create({
-      data: { organizationId: org.id, name, code, siteType, country, city: city || null },
+      data: {
+        id: newSiteId,
+        organizationId: org.id,
+        name,
+        code,
+        siteType,
+        country,
+        city: city || null,
+        parentSiteId: parentSiteId ?? null,
+        path: [...hierarchy.path],
+        depth: hierarchy.depth,
+      },
     });
     await recordAudit(tx, {
       organizationId: org.id,

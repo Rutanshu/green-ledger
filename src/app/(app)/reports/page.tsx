@@ -28,6 +28,7 @@ export default async function ReportsPage() {
       <ReportWizardForm
         periods={periods.map((p) => ({ id: p.id, label: p.label, status: p.status }))}
         sites={sites.map((s) => ({ id: s.id, name: s.name, code: s.code }))}
+        anySiteHasChildren={sites.some((s) => s.parentSiteId !== null)}
       />
 
       {pastReports.length > 0 && (

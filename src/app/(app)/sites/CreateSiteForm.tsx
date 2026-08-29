@@ -8,7 +8,14 @@ interface SiteTypeOption {
   label: string;
 }
 
-export function CreateSiteForm({ siteTypes }: { siteTypes: SiteTypeOption[] }) {
+interface SiteOption {
+  id: string;
+  name: string;
+  code: string;
+  depth: number | null;
+}
+
+export function CreateSiteForm({ siteTypes, siteOptions }: { siteTypes: SiteTypeOption[]; siteOptions: SiteOption[] }) {
   const [open, setOpen] = useState(false);
   // Remounting CreateSiteFields on "Add another" gives it a fresh
   // useActionState — there's no way to reset that hook's state from
@@ -27,6 +34,7 @@ export function CreateSiteForm({ siteTypes }: { siteTypes: SiteTypeOption[] }) {
     <CreateSiteFields
       key={formKey}
       siteTypes={siteTypes}
+      siteOptions={siteOptions}
       onCancel={() => setOpen(false)}
       onAddAnother={() => setFormKey((k) => k + 1)}
     />

@@ -532,6 +532,14 @@ model Site {
   /// org-defined denominators: { "org_units_produced": 1420000 }
   denominators    Json?
   parentSiteId    String?   @map("parent_site_id")
+  /// root-to-self, inclusive of this site's own id. Maintained by
+  /// lib/sites' computeSitePath() at create/move time, not derived at
+  /// query time — a roll-up is `WHERE $1 = ANY(path)`, one indexed
+  /// query, never a recursive CTE per request.
+  path            String[]  @default([])
+  /// 0 for a root site. Kept alongside path so MAX_SITE_DEPTH is a plain
+  /// comparison, not array-length math scattered across call sites.
+  depth           Int?
   inScopeFrom     DateTime? @map("in_scope_from") @db.Date
   inScopeTo       DateTime? @map("in_scope_to") @db.Date
   dataOwnerId     String?   @map("data_owner_id")
@@ -552,6 +560,7 @@ model Site {
 
   @@unique([organizationId, code])
   @@index([organizationId, siteType])
+  @@index([organizationId, parentSiteId])
   @@map("sites")
 }
 

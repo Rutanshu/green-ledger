@@ -8,12 +8,21 @@ interface SiteTypeOption {
   label: string;
 }
 
+interface SiteOption {
+  id: string;
+  name: string;
+  code: string;
+  depth: number | null;
+}
+
 export function CreateSiteFields({
   siteTypes,
+  siteOptions,
   onCancel,
   onAddAnother,
 }: {
   siteTypes: SiteTypeOption[];
+  siteOptions: SiteOption[];
   onCancel: () => void;
   onAddAnother: () => void;
 }) {
@@ -90,6 +99,22 @@ export function CreateSiteFields({
             />
           </label>
         </div>
+        <label className="flex flex-col gap-1 text-[13px] sm:col-span-2">
+          Parent facility (optional)
+          <select
+            name="parentSiteId"
+            defaultValue=""
+            className="rounded-md border border-border bg-plane px-2.5 py-1.5 text-[13px] outline-none focus:border-accent"
+          >
+            <option value="">None — a top-level facility</option>
+            {siteOptions.map((s) => (
+              <option key={s.id} value={s.id}>
+                {"— ".repeat(s.depth ?? 0)}
+                {s.name} ({s.code})
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
       <div className="flex items-center gap-2.5">
         <button

@@ -18,14 +18,19 @@ export default async function SitesPage() {
   const canManage = can(membership.role, "manage_sites");
   const db = orgScopedClient(org.id);
 
-  const [sites, siteTypeEntries] = await Promise.all([
+  const [sitesRaw, siteTypeEntries] = await Promise.all([
     db.site.findMany({
-      include: { assets: { orderBy: { name: "asc" } } },
+      include: { assets: { orderBy: { name: "asc" } }, parentSite: { select: { name: true } } },
       orderBy: { code: "asc" },
     }),
     db.vocabularyEntry.findMany({ where: { kind: "SITE_TYPE" }, orderBy: { label: "asc" } }),
   ]);
+  // Sorting by path (not code) puts a parent immediately before its own
+  // children, since a child's path is the parent's path plus its own id —
+  // the tree reads top-to-bottom without a separate recursive render.
+  const sites = [...sitesRaw].sort((a, b) => a.path.join(",").localeCompare(b.path.join(",")));
   const siteTypes = siteTypeEntries.map((e) => ({ code: e.code, label: e.label }));
+  const siteOptions = sites.map((s) => ({ id: s.id, name: s.name, code: s.code, depth: s.depth }));
 
   return (
     <>
@@ -34,12 +39,12 @@ export default async function SitesPage() {
           <h1 className="text-xl font-semibold">Facilities</h1>
           <p className="mt-0.5 text-[13px] text-ink2">{sites.length} facilities in this organisation.</p>
         </div>
-        {canManage && <CreateSiteForm siteTypes={siteTypes} />}
+        {canManage && <CreateSiteForm siteTypes={siteTypes} siteOptions={siteOptions} />}
       </div>
 
       <div className="mt-5 flex flex-col gap-4">
         {sites.map((site) => (
-          <div key={site.id} className="rounded-[11px] glass">
+          <div key={site.id} className="rounded-[11px] glass" style={{ marginLeft: `${(site.depth ?? 0) * 24}px` }}>
             <div className="flex flex-wrap items-start justify-between gap-3 border-b border-grid p-4">
               <div>
                 <div className="font-semibold">
@@ -48,6 +53,7 @@ export default async function SitesPage() {
                 <div className="mt-0.5 text-[13px] text-ink2">
                   {site.siteType.replaceAll("_", " ").toLowerCase()} · {site.city}, {site.country} · grid{" "}
                   {site.gridRegion ?? "—"}
+                  {site.parentSite && <> · part of {site.parentSite.name}</>}
                 </div>
               </div>
               <div className="flex gap-4 text-[13px] text-ink2">
