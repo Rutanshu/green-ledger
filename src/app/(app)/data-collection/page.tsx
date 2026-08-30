@@ -8,6 +8,7 @@ import { evaluateIndicators, EVAL_REASON_LABEL } from "./indicators";
 import { RestatementForm } from "./RestatementForm";
 import { AssignmentWorkflow } from "./AssignmentWorkflow";
 import { RuleViolationsPanel } from "./RuleViolationsPanel";
+import { CollapsibleSite } from "./CollapsibleSite";
 import { formatQuestionLabel } from "@/lib/labels/formatQuestionLabel";
 
 export const dynamic = "force-dynamic";
@@ -91,28 +92,31 @@ export default async function DataCollectionPage() {
           const indicatorResults = evaluateIndicators(allQuestions, valueByQuestionCode, site);
 
           return (
-            <div key={site.id} className="rounded-[11px] glass">
-              <div className="border-b border-grid p-4">
-                <div className="font-semibold">
-                  {site.name} <span className="font-normal text-muted">({site.code})</span>
-                </div>
-                {assignment && (
+            <CollapsibleSite
+              key={site.id}
+              name={site.name}
+              code={site.code}
+              status={
+                assignment && (
                   <>
-                    <div className="mt-0.5 text-[13px] text-ink2">
-                      <Label entityKind="STATUS" code={assignment.status} overrides={labelOverrides} /> ·{" "}
-                      {assignment.completenessPct.toString()}% complete
-                    </div>
-                    <AssignmentWorkflow
-                      assignmentId={assignment.id}
-                      status={assignment.status}
-                      completenessPct={Number(assignment.completenessPct)}
-                      canSubmit={canEdit}
-                      canApprove={canApprove}
-                      isOwnSubmission={assignment.submittedById === membership.user.id}
-                    />
+                    <Label entityKind="STATUS" code={assignment.status} overrides={labelOverrides} /> ·{" "}
+                    {assignment.completenessPct.toString()}% complete
                   </>
-                )}
-              </div>
+                )
+              }
+              workflow={
+                assignment && (
+                  <AssignmentWorkflow
+                    assignmentId={assignment.id}
+                    status={assignment.status}
+                    completenessPct={Number(assignment.completenessPct)}
+                    canSubmit={canEdit}
+                    canApprove={canApprove}
+                    isOwnSubmission={assignment.submittedById === membership.user.id}
+                  />
+                )
+              }
+            >
               {allQuestions.length === 0 ? (
                 <p className="p-4 text-[13px] text-muted">No assignment for this site.</p>
               ) : (
@@ -234,7 +238,7 @@ export default async function DataCollectionPage() {
                   )}
                 </>
               )}
-            </div>
+            </CollapsibleSite>
           );
         })}
       </div>

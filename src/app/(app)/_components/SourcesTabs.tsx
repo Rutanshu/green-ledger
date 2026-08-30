@@ -11,9 +11,9 @@ const TABS = [
 
 /**
  * Redesign spec §01: three separate nav items (Factor Lab, Builder,
- * Position library) become one — "Emission Sources" — without rewriting
- * the three screens underneath. This strip, dropped at the top of each,
- * is what makes switching between them read as one screen.
+ * Position library) become one — "Data Collection Setup" — without
+ * rewriting the three screens underneath. This strip, dropped at the top
+ * of each, is what makes switching between them read as one screen.
  */
 export function SourcesTabs() {
   const pathname = usePathname();

@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { LockKeyhole } from "lucide-react";
 import { getCurrentMembership } from "@/lib/demo-org";
 import { orgScopedClient } from "@/lib/db/tenant";
 import { can } from "@/lib/auth/permissions";
@@ -7,6 +9,7 @@ import { formatQuestionLabel } from "@/lib/labels/formatQuestionLabel";
 import { CalculationBreakdown } from "@/components/CalculationBreakdown";
 import { AssignmentWorkflow } from "../data-collection/AssignmentWorkflow";
 import { RuleViolationsPanel } from "../data-collection/RuleViolationsPanel";
+import { getPeriodReadinessAction } from "../periods/actions";
 import { CorrectionRequestForm } from "./CorrectionRequestForm";
 import { UnlockPositionValueForm } from "./UnlockPositionValueForm";
 import { Denied } from "../_components/Denied";
@@ -64,6 +67,21 @@ export default async function ReviewPage() {
     violationsByAssignment.set(v.assignmentId, [...(violationsByAssignment.get(v.assignmentId) ?? []), v]);
   }
 
+  // A shortcut, not a duplicate control: locking is a whole-period action
+  // (every facility, not just the ones on this page) gated on manage_org,
+  // a level up from manage_questionnaire — Review Data can only tell you
+  // it's ready and point at Periods, not lock it itself.
+  const periodsById = new Map(inReview.map((s) => [s.assignments[0].period.id, s.assignments[0].period.label]));
+  const readinessByPeriod = new Map(
+    await Promise.all(
+      [...periodsById.entries()].map(async ([periodId, label]) => {
+        const readiness = await getPeriodReadinessAction(periodId);
+        return [periodId, { label, readiness }] as const;
+      }),
+    ),
+  );
+  const readyToLock = [...readinessByPeriod.values()].filter((r) => r.readiness?.ready);
+
   return (
     <>
       <h1 className="text-xl font-semibold">Review Data</h1>
@@ -74,6 +92,17 @@ export default async function ReviewPage() {
             ? `${lockedCount} facilit${lockedCount === 1 ? "y" : "ies"} approved and locked.`
             : `${waitingCount} facilit${waitingCount === 1 ? "y" : "ies"} submitted, waiting on your review${lockedCount > 0 ? ` · ${lockedCount} approved and locked` : ""}.`}
       </p>
+
+      {readyToLock.map((r) => (
+        <Link
+          key={r.label}
+          href="/periods"
+          className="mt-3 flex items-center gap-2.5 rounded-[11px] border border-good/30 bg-good/10 px-4 py-2.5 text-[13px] font-medium text-good hover:bg-good/15"
+        >
+          <LockKeyhole className="h-4 w-4 shrink-0" />
+          Every facility for {r.label} is approved, with no open flags or broken bindings — ready to lock in Periods →
+        </Link>
+      ))}
 
       <div className="mt-5 flex flex-col gap-4">
         {inReview.map((site) => {

@@ -2,26 +2,42 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import type { ComponentType, ReactNode } from "react";
+import {
+  LayoutDashboard,
+  Building,
+  Users,
+  FileText,
+  Database,
+  Sigma,
+  ArrowLeftRight,
+  ScrollText,
+  LifeBuoy,
+  ShieldCheck,
+  Settings,
+} from "lucide-react";
 import { signOut } from "../../login/actions";
 
 // Consolidates the spec's "Frameworks" and "Templates" into one nav item
 // — without platform-global QuestionnaireTemplate rows (a real schema
 // change, not attempted this phase), the two would show identical
 // content. See §15 scoping notes in the plan.
+// Icons are lucide's monochrome-stroke SVGs (currentColor), not emoji —
+// an emoji renders in its own full-color glyph regardless of surrounding
+// text color, which is what made a couple of these look inconsistent.
 const NAV = [
-  { href: "/platform", label: "Platform Overview", icon: "◉" },
-  { href: "/platform/companies", label: "Companies", icon: "▣" },
-  { href: "/platform/users", label: "Global Users", icon: "☖" },
-  { href: "/platform/templates", label: "Templates", icon: "▤" },
-  { href: "/platform/factors", label: "Emission Factors", icon: "⚗" },
-  { href: "/platform/rules", label: "Calculations", icon: "ƒ" },
-  { href: "/platform/integrations", label: "Integrations", icon: "⇄" },
-  { href: "/platform/logs", label: "System Logs", icon: "≡" },
-  { href: "/platform/support", label: "Support", icon: "◎" },
-  { href: "/platform/security", label: "Security", icon: "◈" },
-  { href: "/platform/settings", label: "Platform Settings", icon: "⚙" },
-] as const;
+  { href: "/platform", label: "Platform Overview", icon: LayoutDashboard },
+  { href: "/platform/companies", label: "Companies", icon: Building },
+  { href: "/platform/users", label: "Global Users", icon: Users },
+  { href: "/platform/templates", label: "Templates", icon: FileText },
+  { href: "/platform/factors", label: "Emission Factors", icon: Database },
+  { href: "/platform/rules", label: "Calculations", icon: Sigma },
+  { href: "/platform/integrations", label: "Integrations", icon: ArrowLeftRight },
+  { href: "/platform/logs", label: "System Logs", icon: ScrollText },
+  { href: "/platform/support", label: "Support", icon: LifeBuoy },
+  { href: "/platform/security", label: "Security", icon: ShieldCheck },
+  { href: "/platform/settings", label: "Platform Settings", icon: Settings },
+] as const satisfies readonly { href: string; label: string; icon: ComponentType<{ className?: string }> }[];
 
 function isActive(pathname: string, href: string) {
   return href === "/platform" ? pathname === "/platform" : pathname.startsWith(href);
@@ -51,6 +67,7 @@ export function SuperAdminShell({
         <nav className="flex flex-col gap-px">
           {NAV.map((item) => {
             const active = isActive(pathname, item.href);
+            const Icon = item.icon;
             return (
               <Link
                 key={item.href}
@@ -59,7 +76,7 @@ export function SuperAdminShell({
                   active ? "bg-white/10 font-semibold text-white" : "text-[#9aa39d] hover:bg-white/5 hover:text-[#e4e6e2]"
                 }`}
               >
-                <span className="w-4 text-center opacity-80">{item.icon}</span>
+                <Icon className="h-4 w-4 shrink-0 opacity-80" />
                 {item.label}
               </Link>
             );

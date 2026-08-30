@@ -110,23 +110,33 @@ function Tile({
   unit,
   note,
   tone,
+  href,
 }: {
   label: string;
   value: string;
   unit?: string;
   note?: string;
   tone?: "crit" | "warn";
+  href?: string;
 }) {
   const valueColor = tone === "crit" ? "text-crit" : tone === "warn" ? "text-warn" : "text-ink";
-  return (
-    <div className="rounded-[11px] glass p-4">
+  const body = (
+    <>
       <div className="text-[11.5px] font-semibold uppercase tracking-wide text-muted">{label}</div>
       <div className={`mt-1 text-[26px] font-semibold tracking-tight ${valueColor}`}>
         {value} {unit && <small className="text-sm font-medium text-ink2">{unit}</small>}
       </div>
       {note && <div className="text-xs text-ink2">{note}</div>}
-    </div>
+    </>
   );
+  if (href) {
+    return (
+      <Link href={href} className="rounded-[11px] glass p-4 transition hover:border-accent">
+        {body}
+      </Link>
+    );
+  }
+  return <div className="rounded-[11px] glass p-4">{body}</div>;
 }
 
 export default async function Home() {
@@ -178,9 +188,10 @@ export default async function Home() {
           value={`${broken}`}
           unit={`of ${bindingCount} bound`}
           tone={broken > 0 ? "crit" : undefined}
+          href={broken > 0 ? "/builder" : undefined}
           note={
             broken > 0
-              ? "no factor found — fix in Emission Sources"
+              ? "no factor found — fix in Data Collection Setup →"
               : usingFallback > 0
                 ? `${usingFallback} using a general figure`
                 : undefined

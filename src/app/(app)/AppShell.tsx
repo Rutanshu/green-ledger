@@ -2,38 +2,56 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import type { ComponentType, ReactNode } from "react";
+import {
+  LayoutGrid,
+  Gauge,
+  ClipboardCheck,
+  FileEdit,
+  FileBarChart,
+  Calculator,
+  Building2,
+  Database,
+  Users as UsersIcon,
+  Network,
+  History,
+  Settings as SettingsIcon,
+} from "lucide-react";
 import { signOut } from "../login/actions";
 import { can, ROLE_LABEL, type Role } from "@/lib/auth/permissions";
 
 // Redesign spec §01/§02 — the Admin portal's nav, restructured around
 // what a reviewer/manager's day looks like rather than the app's own
-// internal model names.
+// internal model names. Icons are lucide's monochrome-stroke SVGs
+// (currentColor) rather than emoji glyphs — an emoji renders in its own
+// full-color glyph on most platforms regardless of surrounding text
+// color, which is what made a couple of nav rows look inconsistent with
+// the rest.
 const NAV_PRIMARY = [
-  { href: "/", label: "Overview", icon: "▦" },
-  { href: "/progress", label: "Reporting Progress", icon: "◔" },
-  { href: "/review", label: "Review Data", icon: "✓", requires: "manage_questionnaire" as const },
-  { href: "/data-collection", label: "Data Collection", icon: "✎" },
-  { href: "/reports", label: "Reports", icon: "▧" },
-  { href: "/calculators", label: "Calculators", icon: "🧮", requires: "manage_questionnaire" as const },
+  { href: "/", label: "Overview", icon: LayoutGrid },
+  { href: "/progress", label: "Reporting Progress", icon: Gauge },
+  { href: "/review", label: "Review Data", icon: ClipboardCheck, requires: "manage_questionnaire" as const },
+  { href: "/data-collection", label: "Data Collection", icon: FileEdit },
+  { href: "/reports", label: "Reports", icon: FileBarChart },
+  { href: "/calculators", label: "Calculators", icon: Calculator, requires: "manage_questionnaire" as const },
 ];
 
 const NAV_COMPANY = [
-  { href: "/sites", label: "Facilities", icon: "▤", requires: "manage_sites" as const },
-  { href: "/sources", label: "Emission Sources", icon: "⚗", requires: "manage_factors" as const },
-  { href: "/users", label: "Users", icon: "☖", requires: "manage_users" as const },
+  { href: "/sites", label: "Facilities", icon: Building2, requires: "manage_sites" as const },
+  { href: "/sources", label: "Data Collection Setup", icon: Database, requires: "manage_factors" as const },
+  { href: "/users", label: "Users", icon: UsersIcon, requires: "manage_users" as const },
 ];
 
 const NAV_ADMIN = [
-  { href: "/organisation", label: "Company Structure", icon: "◱", requires: "manage_org" as const },
-  { href: "/audit-log", label: "Audit Log", icon: "🕐", requires: "manage_org" as const },
-  { href: "/settings", label: "Settings", icon: "⚙", requires: "manage_org" as const },
+  { href: "/organisation", label: "Company Structure", icon: Network, requires: "manage_org" as const },
+  { href: "/audit-log", label: "Audit Log", icon: History, requires: "manage_org" as const },
+  { href: "/settings", label: "Settings", icon: SettingsIcon, requires: "manage_org" as const },
 ];
 
 interface NavItem {
   href: string;
   label: string;
-  icon: string;
+  icon: ComponentType<{ className?: string }>;
   requires?: Parameters<typeof can>[1];
 }
 
@@ -44,6 +62,7 @@ function NavGroup({ items, pathname, role }: { items: readonly NavItem[]; pathna
         .filter((item) => !item.requires || can(role, item.requires))
         .map((item) => {
           const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+          const Icon = item.icon;
           return (
             <Link
               key={item.href}
@@ -52,7 +71,7 @@ function NavGroup({ items, pathname, role }: { items: readonly NavItem[]; pathna
                 active ? "bg-track font-semibold text-ink" : "text-ink2 hover:bg-track"
               }`}
             >
-              <span className="w-4 text-center opacity-85">{item.icon}</span>
+              <Icon className="h-4 w-4 shrink-0 opacity-85" />
               {item.label}
             </Link>
           );
