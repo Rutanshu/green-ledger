@@ -47,8 +47,13 @@ export default async function SitesPage() {
           <div key={site.id} className="rounded-[11px] glass" style={{ marginLeft: `${(site.depth ?? 0) * 24}px` }}>
             <div className="flex flex-wrap items-start justify-between gap-3 border-b border-grid p-4">
               <div>
-                <div className="font-semibold">
-                  {site.name} <span className="font-normal text-muted">({site.code})</span>
+                <div className="flex items-center gap-2">
+                  <span className="whitespace-nowrap rounded-full bg-track px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-ink2">
+                    Level {site.depth ?? 0}
+                  </span>
+                  <div className="font-semibold">
+                    {site.name} <span className="font-normal text-muted">({site.code})</span>
+                  </div>
                 </div>
                 <div className="mt-0.5 text-[13px] text-ink2">
                   {site.siteType.replaceAll("_", " ").toLowerCase()} · {site.city}, {site.country} · grid{" "}

@@ -8,6 +8,41 @@ import { Denied } from "../_components/Denied";
 
 export const dynamic = "force-dynamic";
 
+// Release is an assignment-level action (submitAssignment), not a
+// per-answer one — every ANSWERED value on a site is "released" together,
+// the moment the assignment leaves NOT_STARTED/IN_PROGRESS. So a
+// question's real-world status is its own PositionValue.status crossed
+// with whether its parent assignment has been sent for review yet.
+type QuestionStatus = "UNANSWERED" | "DRAFT" | "ANSWERED_UNRELEASED" | "RELEASED" | "FLAGGED" | "APPROVED";
+
+const QUESTION_STATUS_LABEL: Record<QuestionStatus, string> = {
+  UNANSWERED: "Not answered",
+  DRAFT: "Draft",
+  ANSWERED_UNRELEASED: "Answered — not yet released",
+  RELEASED: "Released — awaiting review",
+  FLAGGED: "Sent back",
+  APPROVED: "Approved & locked",
+};
+const QUESTION_STATUS_STYLE: Record<QuestionStatus, string> = {
+  UNANSWERED: "bg-track text-muted",
+  DRAFT: "bg-track text-ink2",
+  ANSWERED_UNRELEASED: "bg-track text-ink2",
+  RELEASED: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300",
+  FLAGGED: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
+  APPROVED: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300",
+};
+const QUESTION_STATUS_ORDER: QuestionStatus[] = ["UNANSWERED", "DRAFT", "ANSWERED_UNRELEASED", "RELEASED", "FLAGGED", "APPROVED"];
+
+function deriveQuestionStatus(valueStatus: string | undefined, assignmentStatus: string | undefined): QuestionStatus {
+  if (valueStatus === "APPROVED") return "APPROVED";
+  if (valueStatus === "FLAGGED") return "FLAGGED";
+  if (valueStatus === "DRAFT") return "DRAFT";
+  if (valueStatus === "ANSWERED") {
+    return assignmentStatus === "NOT_STARTED" || assignmentStatus === "IN_PROGRESS" ? "ANSWERED_UNRELEASED" : "RELEASED";
+  }
+  return "UNANSWERED";
+}
+
 export default async function ProgressPage() {
   const membership = await getCurrentMembership();
   if (!membership) return null;
@@ -62,12 +97,17 @@ export default async function ProgressPage() {
             }),
           )
       : [];
-    const answered = questions.filter((q) => {
-      const v = valueByKey.get(`${site.id}:${assignment!.reportingPeriodId}:${q.code}`);
-      return v?.status === "ANSWERED" || v?.status === "APPROVED";
+    const statusByQuestion = questions.map((q) => {
+      const v = valueByKey.get(`${site.id}:${assignment?.reportingPeriodId}:${q.code}`);
+      return { question: q, status: deriveQuestionStatus(v?.status, assignment?.status) };
     });
-    const outstanding = questions.filter((q) => !answered.includes(q));
-    return { site, assignment, total: questions.length, answered: answered.length, outstanding };
+    const answered = statusByQuestion.filter(({ status }) => status === "ANSWERED_UNRELEASED" || status === "RELEASED" || status === "APPROVED");
+    const outstanding = statusByQuestion.filter(({ status }) => status === "UNANSWERED" || status === "DRAFT").map((s) => s.question);
+    const statusCounts = statusByQuestion.reduce(
+      (acc, { status }) => ({ ...acc, [status]: (acc[status] ?? 0) + 1 }),
+      {} as Partial<Record<QuestionStatus, number>>,
+    );
+    return { site, assignment, total: questions.length, answered: answered.length, outstanding, statusCounts };
   });
 
   return (
@@ -76,7 +116,7 @@ export default async function ProgressPage() {
       <p className="mt-0.5 text-[13px] text-ink2">Where each facility stands, and exactly what's still missing.</p>
 
       <div className="mt-5 flex flex-col gap-3">
-        {rows.map(({ site, assignment, total, answered, outstanding }) => (
+        {rows.map(({ site, assignment, total, answered, outstanding, statusCounts }) => (
           <div key={site.id} className="glass rounded-[11px] p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
@@ -98,6 +138,15 @@ export default async function ProgressPage() {
                 </div>
               )}
             </div>
+            {assignment && total > 0 && (
+              <div className="mt-2.5 flex flex-wrap gap-1.5">
+                {QUESTION_STATUS_ORDER.filter((s) => statusCounts[s]).map((s) => (
+                  <span key={s} className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium ${QUESTION_STATUS_STYLE[s]}`}>
+                    {QUESTION_STATUS_LABEL[s]} · {statusCounts[s]}
+                  </span>
+                ))}
+              </div>
+            )}
             {outstanding.length > 0 && (
               <div className="mt-2 text-[12.5px] text-muted">
                 Still needed: {outstanding.map((q) => formatQuestionLabel(q.label, assignment!.period.label)).join(" · ")}

@@ -22,7 +22,7 @@ async function getDashboardData() {
   if (!org) return null;
 
   const db = orgScopedClient(org.id);
-  const [sites, template, emissionsAgg, labelOverrides] = await Promise.all([
+  const [sites, template, emissionRecords, labelOverrides] = await Promise.all([
     db.site.findMany({ include: { assignments: true }, orderBy: { code: "asc" } }),
     db.questionnaireTemplate.findFirst({
       where: { status: "PUBLISHED" },
@@ -35,10 +35,9 @@ async function getDashboardData() {
     // Dashboard read 0 records right after the app switched to the
     // RLS-restricted role, because this one query wasn't scoped).
     withOrgTransaction(org.id, (tx) =>
-      tx.emissionRecord.aggregate({
+      tx.emissionRecord.findMany({
         where: { activityRecord: { organizationId: org.id } },
-        _sum: { emissionsKgCo2e: true },
-        _count: true,
+        select: { emissionsKgCo2e: true, activityRecord: { select: { siteId: true } } },
       }),
     ),
     // fetched once per page, not once per <Label> — see components/Label.tsx
@@ -63,18 +62,44 @@ async function getDashboardData() {
       ? 0
       : sites.reduce((sum, s) => sum + Number(s.assignments[0]?.completenessPct ?? 0), 0) / sites.length;
 
-  const emissionsKg = new Decimal(emissionsAgg._sum.emissionsKgCo2e?.toString() ?? 0);
+  // Each site's own emissions (excluding any sub-facilities), then a
+  // roll-up per site: a site's path is root-to-self inclusive of its own
+  // id, so "sum every site whose path contains this site's id" is exactly
+  // "this site plus every descendant" — same containment check reports/
+  // actions.ts uses for its own descendant roll-up, just computed here
+  // in memory since the org's whole site list is already loaded.
+  const ownKgBySite = new Map<string, number>();
+  for (const rec of emissionRecords) {
+    const siteId = rec.activityRecord.siteId;
+    ownKgBySite.set(siteId, (ownKgBySite.get(siteId) ?? 0) + Number(rec.emissionsKgCo2e));
+  }
+  const rolledUpKgBySite = new Map<string, number>();
+  for (const site of sites) {
+    let total = 0;
+    for (const other of sites) {
+      if (other.path.includes(site.id)) total += ownKgBySite.get(other.id) ?? 0;
+    }
+    rolledUpKgBySite.set(site.id, total);
+  }
+  const totalEmissionsKg = [...ownKgBySite.values()].reduce((a, b) => a + b, 0);
+
+  // Tree order: a child's path is the parent's path plus its own id, so
+  // sorting by the joined path puts every parent immediately before its
+  // own children — same convention as the Facilities page.
+  const sortedSites = [...sites].sort((a, b) => a.path.join(",").localeCompare(b.path.join(",")));
 
   return {
     org,
-    sites,
+    sites: sortedSites,
     bindingCount: bindings.length,
     broken,
     usingFallback,
     reporting: reporting.length,
     avgCompleteness,
-    emissionRecordCount: emissionsAgg._count,
-    emissionsTonnes: toTonnes(emissionsKg),
+    emissionRecordCount: emissionRecords.length,
+    emissionsTonnes: toTonnes(new Decimal(totalEmissionsKg)),
+    ownKgBySite,
+    rolledUpKgBySite,
     labelOverrides,
   };
 }
@@ -124,13 +149,25 @@ export default async function Home() {
     );
   }
 
-  const { sites, bindingCount, broken, usingFallback, reporting, avgCompleteness, emissionRecordCount, emissionsTonnes, labelOverrides } = data;
+  const {
+    sites,
+    bindingCount,
+    broken,
+    usingFallback,
+    reporting,
+    avgCompleteness,
+    emissionRecordCount,
+    emissionsTonnes,
+    ownKgBySite,
+    rolledUpKgBySite,
+    labelOverrides,
+  } = data;
 
   return (
     <>
       <div className="mb-5">
-        <h1 className="text-xl font-semibold">Dashboard</h1>
-        <p className="mt-0.5 text-[13px] text-ink2">FY2026 progress across {sites.length} sites</p>
+        <h1 className="text-xl font-semibold">Overview</h1>
+        <p className="mt-0.5 text-[13px] text-ink2">FY2026 progress across {sites.length} facilities</p>
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -156,54 +193,62 @@ export default async function Home() {
         )}
       </div>
 
-      <h2 className="mb-2.5 mt-6 text-[14.5px] font-semibold">Progress by site</h2>
-      <div className="overflow-x-auto rounded-[11px] glass">
-        <table className="w-full text-[13px]">
-          <thead>
-            <tr className="border-b border-grid text-left text-[11px] font-semibold uppercase tracking-wide text-muted">
-              <th className="px-4 py-2.5">Site</th>
-              <th className="px-4 py-2.5">Type</th>
-              <th className="px-4 py-2.5">City</th>
-              <th className="px-4 py-2.5">Status</th>
-              <th className="px-4 py-2.5">Completeness</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sites.map((site) => {
-              const assignment = site.assignments[0];
-              const pct = Number(assignment?.completenessPct ?? 0);
-              return (
-                <tr key={site.id} className="border-b border-grid last:border-0 hover:bg-track">
-                  <td className="px-4 py-2.5">
-                    <Link href="/sites" className="font-medium hover:underline">
-                      {site.name}
-                    </Link>{" "}
-                    <span className="text-muted">({site.code})</span>
-                  </td>
-                  <td className="px-4 py-2.5 text-ink2">{site.siteType.replaceAll("_", " ").toLowerCase()}</td>
-                  <td className="px-4 py-2.5 text-ink2">{site.city}</td>
-                  <td className="px-4 py-2.5">
-                    {assignment ? (
-                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLE[assignment.status]}`}>
-                        <Label entityKind="STATUS" code={assignment.status} overrides={labelOverrides} />
-                      </span>
-                    ) : (
-                      <span className="text-muted">—</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <div className="flex items-center gap-2">
-                      <div className="h-[7px] min-w-[52px] flex-1 overflow-hidden rounded-full bg-track">
-                        <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
-                      </div>
-                      <span className="text-ink2">{pct}%</span>
+      <h2 className="mb-2.5 mt-6 text-[14.5px] font-semibold">Facility hierarchy</h2>
+      <div className="flex flex-col gap-2.5">
+        {sites.map((site) => {
+          const assignment = site.assignments[0];
+          const pct = Number(assignment?.completenessPct ?? 0);
+          const ownKg = ownKgBySite.get(site.id) ?? 0;
+          const rolledUpKg = rolledUpKgBySite.get(site.id) ?? 0;
+          const hasSubFacilities = rolledUpKg !== ownKg;
+          const subFacilityCount = sites.filter((s) => s.id !== site.id && s.path.includes(site.id)).length;
+
+          return (
+            <Link
+              key={site.id}
+              href={`/sites/${site.id}/breakdown`}
+              className="rounded-[11px] glass p-4 transition hover:border-accent"
+              style={{ marginLeft: `${(site.depth ?? 0) * 24}px` }}
+            >
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="whitespace-nowrap rounded-full bg-track px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-ink2">
+                    Level {site.depth ?? 0}
+                  </span>
+                  <div>
+                    <div className="font-medium">
+                      {site.name} <span className="font-normal text-muted">({site.code})</span>
                     </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                    {assignment && (
+                      <div className="mt-0.5 flex items-center gap-2 text-[12.5px] text-ink2">
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLE[assignment.status]}`}>
+                          <Label entityKind="STATUS" code={assignment.status} overrides={labelOverrides} />
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <div className="h-[6px] w-20 overflow-hidden rounded-full bg-track">
+                            <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
+                          </div>
+                          <span>{pct}%</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-[15px] font-semibold tracking-tight">
+                    {(rolledUpKg / 1000).toLocaleString(undefined, { maximumFractionDigits: 2 })} <small className="text-xs font-medium text-ink2">tCO2e</small>
+                  </div>
+                  {hasSubFacilities && (
+                    <div className="text-[11.5px] text-muted">
+                      incl. {subFacilityCount} sub-facilit{subFacilityCount === 1 ? "y" : "ies"} ({(ownKg / 1000).toLocaleString(undefined, { maximumFractionDigits: 2 })} own)
+                    </div>
+                  )}
+                  <div className="text-[11.5px] text-accent">View per-question breakdown →</div>
+                </div>
+              </div>
+            </Link>
+          );
+        })}
       </div>
     </>
   );
