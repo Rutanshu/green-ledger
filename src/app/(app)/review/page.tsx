@@ -9,6 +9,7 @@ import { formatQuestionLabel } from "@/lib/labels/formatQuestionLabel";
 import { CalculationBreakdown } from "@/components/CalculationBreakdown";
 import { AssignmentWorkflow } from "../data-collection/AssignmentWorkflow";
 import { RuleViolationsPanel } from "../data-collection/RuleViolationsPanel";
+import { CollapsibleSite } from "../data-collection/CollapsibleSite";
 import { getPeriodReadinessAction } from "../periods/actions";
 import { CorrectionRequestForm } from "./CorrectionRequestForm";
 import { UnlockPositionValueForm } from "./UnlockPositionValueForm";
@@ -31,16 +32,19 @@ export default async function ReviewPage() {
     include: {
       // APPROVED stays visible here too — not for the approve action (AssignmentWorkflow
       // shows nothing once approved) but so a manager can unlock an individual locked
-      // answer without having to hunt through Overview/Progress for it.
+      // answer without having to hunt through Overview/Progress for it. Excludes the
+      // pre-split "Standard Operations" template (ARCHIVED, kept only for history).
       assignments: {
-        where: { status: { in: ["IN_REVIEW", "APPROVED"] } },
+        where: { status: { in: ["IN_REVIEW", "APPROVED"] }, template: { status: { not: "ARCHIVED" } } },
         include: { template: { include: { sections: { include: { questions: true } } } }, period: true },
       },
     },
   });
   const inReview = sites.filter((s) => s.assignments.length > 0);
-  const waitingCount = inReview.filter((s) => s.assignments[0].status === "IN_REVIEW").length;
-  const lockedCount = inReview.length - waitingCount;
+  // A site can hold up to 17 assignments now — count individual
+  // scope-assignments, not sites, for the headline numbers.
+  const waitingCount = inReview.flatMap((s) => s.assignments).filter((a) => a.status === "IN_REVIEW").length;
+  const lockedCount = inReview.flatMap((s) => s.assignments).filter((a) => a.status === "APPROVED").length;
 
   const positionValues = await db.positionValue.findMany({
     where: { siteId: { in: inReview.map((s) => s.id) } },
@@ -71,7 +75,7 @@ export default async function ReviewPage() {
   // (every facility, not just the ones on this page) gated on manage_org,
   // a level up from manage_questionnaire — Review Data can only tell you
   // it's ready and point at Periods, not lock it itself.
-  const periodsById = new Map(inReview.map((s) => [s.assignments[0].period.id, s.assignments[0].period.label]));
+  const periodsById = new Map(inReview.flatMap((s) => s.assignments).map((a) => [a.period.id, a.period.label]));
   const readinessByPeriod = new Map(
     await Promise.all(
       [...periodsById.entries()].map(async ([periodId, label]) => {
@@ -89,8 +93,8 @@ export default async function ReviewPage() {
         {inReview.length === 0
           ? "Nothing waiting on you right now."
           : waitingCount === 0
-            ? `${lockedCount} facilit${lockedCount === 1 ? "y" : "ies"} approved and locked.`
-            : `${waitingCount} facilit${waitingCount === 1 ? "y" : "ies"} submitted, waiting on your review${lockedCount > 0 ? ` · ${lockedCount} approved and locked` : ""}.`}
+            ? `${lockedCount} scope${lockedCount === 1 ? "" : "s"} approved and locked, across ${inReview.length} facilit${inReview.length === 1 ? "y" : "ies"}.`
+            : `${waitingCount} scope${waitingCount === 1 ? "" : "s"} submitted, waiting on your review${lockedCount > 0 ? ` · ${lockedCount} approved and locked` : ""}.`}
       </p>
 
       {readyToLock.map((r) => (
@@ -106,100 +110,121 @@ export default async function ReviewPage() {
 
       <div className="mt-5 flex flex-col gap-4">
         {inReview.map((site) => {
-          const assignment = site.assignments[0];
-          const questions = assignment.template.sections.flatMap((s) => s.questions).filter((q) => q.allowedUnits.length > 0);
-          const isOwnSubmission = assignment.submittedById === membership.user.id;
+          const siteWaiting = site.assignments.filter((a) => a.status === "IN_REVIEW").length;
+          const siteLocked = site.assignments.length - siteWaiting;
 
           return (
-            <div key={site.id} className="rounded-[11px] glass">
-              <div className="flex items-start justify-between gap-3 border-b border-grid p-4">
-                <div>
-                  <div className="font-semibold">
-                    {site.name} <span className="font-normal text-muted">({site.code})</span>
-                  </div>
-                  <div className="mt-0.5 text-[13px] text-ink2">
-                    {assignment.period.label} · <Label entityKind="STATUS" code={assignment.status} overrides={labelOverrides} />
-                  </div>
-                </div>
-                <AssignmentWorkflow
-                  assignmentId={assignment.id}
-                  status={assignment.status}
-                  completenessPct={Number(assignment.completenessPct)}
-                  canSubmit={false}
-                  canApprove={canApprove}
-                  isOwnSubmission={isOwnSubmission}
-                />
-              </div>
-
-              <div className="divide-y divide-grid">
-                {questions.map((q) => {
-                  const v = valueByKey.get(`${site.id}:${assignment.reportingPeriodId}:${q.code}`);
-                  if (!v || v.status === "UNANSWERED" || v.status === "DRAFT") return null;
-                  const emissionRecords = v.activityRecords.flatMap((ar) => ar.emissionRecords);
-                  const primary = emissionRecords[0];
-                  const openCorrection = correctionByPositionValueId.get(v.id);
+            <CollapsibleSite
+              key={site.id}
+              name={site.name}
+              code={site.code}
+              status={
+                <>
+                  {siteWaiting > 0 && `${siteWaiting} awaiting review`}
+                  {siteWaiting > 0 && siteLocked > 0 && " · "}
+                  {siteLocked > 0 && `${siteLocked} approved`}
+                </>
+              }
+            >
+              <div className="flex flex-col gap-2.5 p-3">
+                {site.assignments.map((assignment) => {
+                  const questions = assignment.template.sections.flatMap((s) => s.questions).filter((q) => q.allowedUnits.length > 0);
+                  const isOwnSubmission = assignment.submittedById === membership.user.id;
 
                   return (
-                    <div key={q.id} className="p-4">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                          <div className="text-[14px] font-medium">{formatQuestionLabel(q.label, assignment.period.label)}</div>
-                          <div className="mt-0.5 text-[13px] text-ink2">
-                            {v.valueNumeric?.toString()} {v.unit} · {labelText("DATA_QUALITY", v.dataQuality ?? "ESTIMATED", labelOverrides)}
-                          </div>
-                        </div>
-                        {v.status === "APPROVED" ? (
-                          <div className="flex flex-col items-end gap-1.5">
-                            <span className="whitespace-nowrap rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
-                              approved — locked
-                            </span>
-                            {canApprove && <UnlockPositionValueForm positionValueId={v.id} />}
-                          </div>
-                        ) : v.status === "FLAGGED" && openCorrection ? (
-                          <span className="whitespace-nowrap rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
-                            sent back: {openCorrection.note}
-                          </span>
-                        ) : (
-                          <CorrectionRequestForm positionValueId={v.id} />
-                        )}
+                    <CollapsibleSite
+                      key={assignment.id}
+                      compact
+                      name={assignment.template.name}
+                      status={
+                        <>
+                          {assignment.period.label} · <Label entityKind="STATUS" code={assignment.status} overrides={labelOverrides} />
+                        </>
+                      }
+                      workflow={
+                        <AssignmentWorkflow
+                          assignmentId={assignment.id}
+                          status={assignment.status}
+                          completenessPct={Number(assignment.completenessPct)}
+                          canSubmit={false}
+                          canApprove={canApprove}
+                          isOwnSubmission={isOwnSubmission}
+                        />
+                      }
+                    >
+                      <div className="divide-y divide-grid">
+                        {questions.map((q) => {
+                          const v = valueByKey.get(`${site.id}:${assignment.reportingPeriodId}:${q.code}`);
+                          if (!v || v.status === "UNANSWERED" || v.status === "DRAFT") return null;
+                          const emissionRecords = v.activityRecords.flatMap((ar) => ar.emissionRecords);
+                          const primary = emissionRecords[0];
+                          const openCorrection = correctionByPositionValueId.get(v.id);
+
+                          return (
+                            <div key={q.id} className="p-4">
+                              <div className="flex flex-wrap items-start justify-between gap-3">
+                                <div>
+                                  <div className="text-[14px] font-medium">{formatQuestionLabel(q.label, assignment.period.label)}</div>
+                                  <div className="mt-0.5 text-[13px] text-ink2">
+                                    {v.valueNumeric?.toString()} {v.unit} · {labelText("DATA_QUALITY", v.dataQuality ?? "ESTIMATED", labelOverrides)}
+                                  </div>
+                                </div>
+                                {v.status === "APPROVED" ? (
+                                  <div className="flex flex-col items-end gap-1.5">
+                                    <span className="whitespace-nowrap rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
+                                      approved — locked
+                                    </span>
+                                    {canApprove && <UnlockPositionValueForm positionValueId={v.id} />}
+                                  </div>
+                                ) : v.status === "FLAGGED" && openCorrection ? (
+                                  <span className="whitespace-nowrap rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                                    sent back: {openCorrection.note}
+                                  </span>
+                                ) : (
+                                  <CorrectionRequestForm positionValueId={v.id} />
+                                )}
+                              </div>
+                              {primary && (
+                                <div className="mt-2.5">
+                                  <CalculationBreakdown
+                                    record={{
+                                      quantityNormalised: primary.quantityNormalised.toString(),
+                                      unitNormalised: primary.unitNormalised,
+                                      factorValue: primary.factorValue.toString(),
+                                      factorUnitNumerator: primary.factorUnitNumerator,
+                                      factorUnitDenominator: primary.factorUnitDenominator,
+                                      factorSource: primary.factorSource,
+                                      factorVersion: primary.factorVersion,
+                                      gwpValue: primary.gwpValue.toString(),
+                                      gwpSet: primary.gwpSet,
+                                      emissionsKgCo2e: primary.emissionsKgCo2e.toString(),
+                                      calcEngineVersion: primary.calcEngineVersion,
+                                      calculatedAt: primary.calculatedAt.toISOString(),
+                                    }}
+                                    labelOverrides={labelOverrides}
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
-                      {primary && (
-                        <div className="mt-2.5">
-                          <CalculationBreakdown
-                            record={{
-                              quantityNormalised: primary.quantityNormalised.toString(),
-                              unitNormalised: primary.unitNormalised,
-                              factorValue: primary.factorValue.toString(),
-                              factorUnitNumerator: primary.factorUnitNumerator,
-                              factorUnitDenominator: primary.factorUnitDenominator,
-                              factorSource: primary.factorSource,
-                              factorVersion: primary.factorVersion,
-                              gwpValue: primary.gwpValue.toString(),
-                              gwpSet: primary.gwpSet,
-                              emissionsKgCo2e: primary.emissionsKgCo2e.toString(),
-                              calcEngineVersion: primary.calcEngineVersion,
-                              calculatedAt: primary.calculatedAt.toISOString(),
-                            }}
-                            labelOverrides={labelOverrides}
-                          />
-                        </div>
-                      )}
-                    </div>
+
+                      <RuleViolationsPanel
+                        violations={(violationsByAssignment.get(assignment.id) ?? []).map((v) => ({
+                          id: v.id,
+                          ruleName: v.rule.name,
+                          message: v.message,
+                          questionCode: v.questionCode,
+                          status: v.status,
+                          acknowledgementComment: v.acknowledgementComment,
+                        }))}
+                      />
+                    </CollapsibleSite>
                   );
                 })}
               </div>
-
-              <RuleViolationsPanel
-                violations={(violationsByAssignment.get(assignment.id) ?? []).map((v) => ({
-                  id: v.id,
-                  ruleName: v.rule.name,
-                  message: v.message,
-                  questionCode: v.questionCode,
-                  status: v.status,
-                  acknowledgementComment: v.acknowledgementComment,
-                }))}
-              />
-            </div>
+            </CollapsibleSite>
           );
         })}
       </div>

@@ -55,7 +55,10 @@ export default async function ProgressPage() {
     orderBy: { code: "asc" },
     include: {
       assets: true,
+      // Excludes the pre-split "Standard Operations" template (ARCHIVED,
+      // kept only for history) — nothing left in it to track progress on.
       assignments: {
+        where: { template: { status: { not: "ARCHIVED" } } },
         include: { template: { include: { sections: { include: { questions: true } } } }, period: true },
       },
     },
@@ -69,8 +72,9 @@ export default async function ProgressPage() {
     positionValues.map((v) => [`${v.siteId}:${v.reportingPeriodId}:${v.position.positionCode}`, v]),
   );
 
-  const rows = sites.map((site) => {
-    const assignment = site.assignments[0];
+  // A facility now holds up to 17 assignments — one row per (site,
+  // assignment), grouped visually under the site.
+  const siteRows = sites.map((site) => {
     // Filtered by visible_if, not just isRequired — a site with no forklift
     // was showing "LPG for forklift" as missing forever. See CLAUDE.md rule
     // 10: one visibility function, and this page had stopped using it.
@@ -82,32 +86,35 @@ export default async function ProgressPage() {
       commissionedOn: a.commissionedOn,
       decommissionedOn: a.decommissionedOn,
     }));
-    const questions = assignment
-      ? assignment.template.sections
-          .flatMap((s) => s.questions)
-          .filter((q) => q.isRequired && q.allowedUnits.length > 0)
-          .filter((q) =>
-            evaluateVisibility(q.visibleIf as VisibilityRule | null, {
-              siteType: site.siteType,
-              siteCountry: site.country,
-              assets,
-              answers: {},
-              periodStart: assignment.period.startsOn,
-              periodEnd: assignment.period.endsOn,
-            }),
-          )
-      : [];
-    const statusByQuestion = questions.map((q) => {
-      const v = valueByKey.get(`${site.id}:${assignment?.reportingPeriodId}:${q.code}`);
-      return { question: q, status: deriveQuestionStatus(v?.status, assignment?.status) };
+
+    const assignmentRows = site.assignments.map((assignment) => {
+      const questions = assignment.template.sections
+        .flatMap((s) => s.questions)
+        .filter((q) => q.isRequired && q.allowedUnits.length > 0)
+        .filter((q) =>
+          evaluateVisibility(q.visibleIf as VisibilityRule | null, {
+            siteType: site.siteType,
+            siteCountry: site.country,
+            assets,
+            answers: {},
+            periodStart: assignment.period.startsOn,
+            periodEnd: assignment.period.endsOn,
+          }),
+        );
+      const statusByQuestion = questions.map((q) => {
+        const v = valueByKey.get(`${site.id}:${assignment.reportingPeriodId}:${q.code}`);
+        return { question: q, status: deriveQuestionStatus(v?.status, assignment.status) };
+      });
+      const answered = statusByQuestion.filter(({ status }) => status === "ANSWERED_UNRELEASED" || status === "RELEASED" || status === "APPROVED");
+      const outstanding = statusByQuestion.filter(({ status }) => status === "UNANSWERED" || status === "DRAFT").map((s) => s.question);
+      const statusCounts = statusByQuestion.reduce(
+        (acc, { status }) => ({ ...acc, [status]: (acc[status] ?? 0) + 1 }),
+        {} as Partial<Record<QuestionStatus, number>>,
+      );
+      return { assignment, total: questions.length, answered: answered.length, outstanding, statusCounts };
     });
-    const answered = statusByQuestion.filter(({ status }) => status === "ANSWERED_UNRELEASED" || status === "RELEASED" || status === "APPROVED");
-    const outstanding = statusByQuestion.filter(({ status }) => status === "UNANSWERED" || status === "DRAFT").map((s) => s.question);
-    const statusCounts = statusByQuestion.reduce(
-      (acc, { status }) => ({ ...acc, [status]: (acc[status] ?? 0) + 1 }),
-      {} as Partial<Record<QuestionStatus, number>>,
-    );
-    return { site, assignment, total: questions.length, answered: answered.length, outstanding, statusCounts };
+
+    return { site, assignmentRows };
   });
 
   return (
@@ -115,41 +122,50 @@ export default async function ProgressPage() {
       <h1 className="text-xl font-semibold">Reporting Progress</h1>
       <p className="mt-0.5 text-[13px] text-ink2">Where each facility stands, and exactly what's still missing.</p>
 
-      <div className="mt-5 flex flex-col gap-3">
-        {rows.map(({ site, assignment, total, answered, outstanding, statusCounts }) => (
+      <div className="mt-5 flex flex-col gap-4">
+        {siteRows.map(({ site, assignmentRows }) => (
           <div key={site.id} className="glass rounded-[11px] p-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <div className="font-medium">
-                  {site.name} <span className="font-normal text-muted">({site.code})</span>
-                </div>
-                <div className="mt-0.5 text-[12.5px] text-ink2">
-                  {assignment ? `${assignment.period.label} · ${answered} of ${total} required items answered` : "No assignment yet"}
-                </div>
-              </div>
-              {assignment && (
-                <div className="flex items-center gap-2">
-                  <div className="h-[7px] w-32 overflow-hidden rounded-full bg-track">
-                    <div className="h-full rounded-full bg-accent" style={{ width: `${total === 0 ? 100 : Math.round((answered / total) * 100)}%` }} />
-                  </div>
-                  <Link href="/review" className="text-[12.5px] font-medium text-accent hover:underline">
-                    Review
-                  </Link>
-                </div>
-              )}
+            <div className="font-medium">
+              {site.name} <span className="font-normal text-muted">({site.code})</span>
             </div>
-            {assignment && total > 0 && (
-              <div className="mt-2.5 flex flex-wrap gap-1.5">
-                {QUESTION_STATUS_ORDER.filter((s) => statusCounts[s]).map((s) => (
-                  <span key={s} className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium ${QUESTION_STATUS_STYLE[s]}`}>
-                    {QUESTION_STATUS_LABEL[s]} · {statusCounts[s]}
-                  </span>
+            {assignmentRows.length === 0 ? (
+              <div className="mt-1 text-[12.5px] text-ink2">No assignment yet</div>
+            ) : (
+              <div className="mt-2.5 flex flex-col gap-2.5">
+                {assignmentRows.map(({ assignment, total, answered, outstanding, statusCounts }) => (
+                  <div key={assignment.id} className="rounded-[9px] border border-grid p-2.5">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <div className="text-[13px] font-medium">{assignment.template.name}</div>
+                        <div className="mt-0.5 text-[12px] text-ink2">
+                          {assignment.period.label} · {answered} of {total} required items answered
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="h-[6px] w-24 overflow-hidden rounded-full bg-track">
+                          <div className="h-full rounded-full bg-accent" style={{ width: `${total === 0 ? 100 : Math.round((answered / total) * 100)}%` }} />
+                        </div>
+                        <Link href="/review" className="text-[12px] font-medium text-accent hover:underline">
+                          Review
+                        </Link>
+                      </div>
+                    </div>
+                    {total > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {QUESTION_STATUS_ORDER.filter((s) => statusCounts[s]).map((s) => (
+                          <span key={s} className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium ${QUESTION_STATUS_STYLE[s]}`}>
+                            {QUESTION_STATUS_LABEL[s]} · {statusCounts[s]}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {outstanding.length > 0 && (
+                      <div className="mt-1.5 text-[12px] text-muted">
+                        Still needed: {outstanding.map((q) => formatQuestionLabel(q.label, assignment.period.label)).join(" · ")}
+                      </div>
+                    )}
+                  </div>
                 ))}
-              </div>
-            )}
-            {outstanding.length > 0 && (
-              <div className="mt-2 text-[12.5px] text-muted">
-                Still needed: {outstanding.map((q) => formatQuestionLabel(q.label, assignment!.period.label)).join(" · ")}
               </div>
             )}
           </div>

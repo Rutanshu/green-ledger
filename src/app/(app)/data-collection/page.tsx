@@ -25,7 +25,12 @@ export default async function DataCollectionPage() {
   const sites = await db.site.findMany({
     orderBy: { code: "asc" },
     include: {
+      // Excludes assignments against an ARCHIVED template (the pre-split
+      // "Standard Operations" row, kept only for audit history — its
+      // sections all moved to the 17 new templates, so it has nothing
+      // left to show or act on here).
       assignments: {
+        where: { template: { status: { not: "ARCHIVED" } } },
         include: {
           template: { include: { sections: { include: { questions: true } } } },
           period: true,

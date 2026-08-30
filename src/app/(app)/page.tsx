@@ -2,28 +2,23 @@ import Link from "next/link";
 import { getCurrentMembership, getCurrentOrg } from "@/lib/demo-org";
 import { orgScopedClient, withOrgTransaction } from "@/lib/db/tenant";
 import { toTonnes } from "@/lib/calc";
-import { getOrgLabelOverrides } from "@/lib/labels/getOrgOverrides";
-import { Label } from "@/components/Label";
 import { DataUserHome } from "./_shells/DataUserHome";
 import Decimal from "decimal.js";
 
 export const dynamic = "force-dynamic";
-
-const STATUS_STYLE: Record<string, string> = {
-  NOT_STARTED: "bg-track text-ink2",
-  IN_PROGRESS: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300",
-  IN_REVIEW: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300",
-  APPROVED: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300",
-  LOCKED: "bg-track text-ink",
-};
 
 async function getDashboardData() {
   const org = await getCurrentOrg();
   if (!org) return null;
 
   const db = orgScopedClient(org.id);
-  const [sites, templates, emissionRecords, labelOverrides] = await Promise.all([
-    db.site.findMany({ include: { assignments: true }, orderBy: { code: "asc" } }),
+  const [sites, templates, emissionRecords] = await Promise.all([
+    db.site.findMany({
+      // Excludes the pre-split "Standard Operations" template (ARCHIVED,
+      // kept only for history) from the roll-up below.
+      include: { assignments: { where: { template: { status: { not: "ARCHIVED" } } } } },
+      orderBy: { code: "asc" },
+    }),
     // Up to 17 published templates now (one per scope) — findMany, not
     // findFirst, or this would silently check only whichever one template
     // Prisma returns first and miss a broken binding sitting in any other.
@@ -43,8 +38,6 @@ async function getDashboardData() {
         select: { emissionsKgCo2e: true, activityRecord: { select: { siteId: true } } },
       }),
     ),
-    // fetched once per page, not once per <Label> — see components/Label.tsx
-    getOrgLabelOverrides(org.id),
   ]);
 
   const bindings = templates
@@ -60,11 +53,12 @@ async function getDashboardData() {
   const broken = bindings.filter((b) => b.health === "BROKEN" || b.health === "AMBIGUOUS").length;
   const usingFallback = bindings.filter((b) => b.health === "FALLBACK_REGION").length;
 
-  const reporting = sites.filter((s) => s.assignments[0]?.status !== "NOT_STARTED" && s.assignments[0]);
+  // "Reporting" and completeness now roll up across a site's own up-to-17
+  // assignments, not just assignments[0].
+  const reporting = sites.filter((s) => s.assignments.some((a) => a.status !== "NOT_STARTED"));
+  const allAssignments = sites.flatMap((s) => s.assignments);
   const avgCompleteness =
-    sites.length === 0
-      ? 0
-      : sites.reduce((sum, s) => sum + Number(s.assignments[0]?.completenessPct ?? 0), 0) / sites.length;
+    allAssignments.length === 0 ? 0 : allAssignments.reduce((sum, a) => sum + Number(a.completenessPct), 0) / allAssignments.length;
 
   // Each site's own emissions (excluding any sub-facilities), then a
   // roll-up per site: a site's path is root-to-self inclusive of its own
@@ -104,7 +98,6 @@ async function getDashboardData() {
     emissionsTonnes: toTonnes(new Decimal(totalEmissionsKg)),
     ownKgBySite,
     rolledUpKgBySite,
-    labelOverrides,
   };
 }
 
@@ -174,7 +167,6 @@ export default async function Home() {
     emissionsTonnes,
     ownKgBySite,
     rolledUpKgBySite,
-    labelOverrides,
   } = data;
 
   return (
@@ -211,8 +203,9 @@ export default async function Home() {
       <h2 className="mb-2.5 mt-6 text-[14.5px] font-semibold">Facility hierarchy</h2>
       <div className="flex flex-col gap-2.5">
         {sites.map((site) => {
-          const assignment = site.assignments[0];
-          const pct = Number(assignment?.completenessPct ?? 0);
+          const approvedCount = site.assignments.filter((a) => a.status === "APPROVED" || a.status === "LOCKED").length;
+          const avgPct =
+            site.assignments.length === 0 ? 0 : site.assignments.reduce((sum, a) => sum + Number(a.completenessPct), 0) / site.assignments.length;
           const ownKg = ownKgBySite.get(site.id) ?? 0;
           const rolledUpKg = rolledUpKgBySite.get(site.id) ?? 0;
           const hasSubFacilities = rolledUpKg !== ownKg;
@@ -234,16 +227,16 @@ export default async function Home() {
                     <div className="font-medium">
                       {site.name} <span className="font-normal text-muted">({site.code})</span>
                     </div>
-                    {assignment && (
+                    {site.assignments.length > 0 && (
                       <div className="mt-0.5 flex items-center gap-2 text-[12.5px] text-ink2">
-                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLE[assignment.status]}`}>
-                          <Label entityKind="STATUS" code={assignment.status} overrides={labelOverrides} />
+                        <span className="rounded-full bg-track px-2 py-0.5 text-xs font-medium text-ink2">
+                          {approvedCount} of {site.assignments.length} scopes approved
                         </span>
                         <div className="flex items-center gap-1.5">
                           <div className="h-[6px] w-20 overflow-hidden rounded-full bg-track">
-                            <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
+                            <div className="h-full rounded-full bg-accent" style={{ width: `${Math.round(avgPct)}%` }} />
                           </div>
-                          <span>{pct}%</span>
+                          <span>{Math.round(avgPct)}%</span>
                         </div>
                       </div>
                     )}

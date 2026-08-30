@@ -32,21 +32,21 @@ export default async function SiteBreakdownPage({ params }: { params: Promise<{ 
     where: { id },
     include: {
       parentSite: { select: { name: true } },
-      assignments: { include: { template: { include: { sections: { include: { questions: true } } } }, period: true } },
+      // Excludes the pre-split "Standard Operations" template (ARCHIVED,
+      // kept only for history) — nothing left in it to show.
+      assignments: {
+        where: { template: { status: { not: "ARCHIVED" } } },
+        include: { template: { include: { sections: { include: { questions: true } } } }, period: true },
+      },
     },
   });
   if (!site) notFound();
 
-  const assignment = site.assignments[0];
-  const questions = assignment ? assignment.template.sections.flatMap((s) => s.questions).filter((q) => q.allowedUnits.length > 0) : [];
-
-  const positionValues = assignment
-    ? await db.positionValue.findMany({
-        where: { siteId: site.id, reportingPeriodId: assignment.reportingPeriodId },
-        include: { position: true, activityRecords: { include: { emissionRecords: true } } },
-      })
-    : [];
-  const valueByQuestionCode = new Map(positionValues.map((v) => [v.position.positionCode, v]));
+  const positionValues = await db.positionValue.findMany({
+    where: { siteId: site.id, reportingPeriodId: { in: site.assignments.map((a) => a.reportingPeriodId) } },
+    include: { position: true, activityRecords: { include: { emissionRecords: true } } },
+  });
+  const valueByKey = new Map(positionValues.map((v) => [`${v.reportingPeriodId}:${v.position.positionCode}`, v]));
 
   const totalKg = positionValues.reduce(
     (sum, v) => sum + v.activityRecords.flatMap((ar) => ar.emissionRecords).reduce((s, r) => s + Number(r.emissionsKgCo2e), 0),
@@ -66,7 +66,7 @@ export default async function SiteBreakdownPage({ params }: { params: Promise<{ 
           <p className="mt-0.5 text-[13px] text-ink2">
             Level {site.depth ?? 0}
             {site.parentSite && <> · part of {site.parentSite.name}</>}
-            {assignment && <> · {assignment.period.label}</>}
+            {site.assignments[0] && <> · {site.assignments[0].period.label}</>}
           </p>
         </div>
         <div className="rounded-[11px] glass px-4 py-2.5 text-right">
@@ -75,52 +75,62 @@ export default async function SiteBreakdownPage({ params }: { params: Promise<{ 
         </div>
       </div>
 
-      {!assignment ? (
+      {site.assignments.length === 0 ? (
         <p className="mt-5 text-[13px] text-muted">No assignment for this facility yet.</p>
       ) : (
-        <div className="mt-5 divide-y divide-grid rounded-[11px] glass">
-          {questions.map((q) => {
-            const v = valueByQuestionCode.get(q.code);
-            const emissionRecords = v?.activityRecords.flatMap((ar) => ar.emissionRecords) ?? [];
-            const primary = emissionRecords[0];
+        <div className="mt-5 flex flex-col gap-4">
+          {site.assignments.map((assignment) => {
+            const questions = assignment.template.sections.flatMap((s) => s.questions).filter((q) => q.allowedUnits.length > 0);
             return (
-              <div key={q.id} className="p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <div className="text-[14px] font-medium">{formatQuestionLabel(q.label, assignment.period.label)}</div>
-                    <div className="mt-0.5 text-[13px] text-ink2">
-                      {v && v.status !== "UNANSWERED" ? (
-                        <>
-                          {v.valueNumeric?.toString()} {v.unit} ·{" "}
-                          <Label entityKind="STATUS" code={v.status === "APPROVED" ? "APPROVED" : v.status} overrides={labelOverrides} />
-                        </>
-                      ) : (
-                        <span className="text-muted">not answered</span>
-                      )}
-                    </div>
-                  </div>
+              <div key={assignment.id} className="rounded-[11px] glass">
+                <div className="border-b border-grid p-3 text-[13px] font-semibold">{assignment.template.name}</div>
+                <div className="divide-y divide-grid">
+                  {questions.map((q) => {
+                    const v = valueByKey.get(`${assignment.reportingPeriodId}:${q.code}`);
+                    const emissionRecords = v?.activityRecords.flatMap((ar) => ar.emissionRecords) ?? [];
+                    const primary = emissionRecords[0];
+                    return (
+                      <div key={q.id} className="p-4">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <div className="text-[14px] font-medium">{formatQuestionLabel(q.label, assignment.period.label)}</div>
+                            <div className="mt-0.5 text-[13px] text-ink2">
+                              {v && v.status !== "UNANSWERED" ? (
+                                <>
+                                  {v.valueNumeric?.toString()} {v.unit} ·{" "}
+                                  <Label entityKind="STATUS" code={v.status === "APPROVED" ? "APPROVED" : v.status} overrides={labelOverrides} />
+                                </>
+                              ) : (
+                                <span className="text-muted">not answered</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        {primary && (
+                          <div className="mt-2.5">
+                            <CalculationBreakdown
+                              record={{
+                                quantityNormalised: primary.quantityNormalised.toString(),
+                                unitNormalised: primary.unitNormalised,
+                                factorValue: primary.factorValue.toString(),
+                                factorUnitNumerator: primary.factorUnitNumerator,
+                                factorUnitDenominator: primary.factorUnitDenominator,
+                                factorSource: primary.factorSource,
+                                factorVersion: primary.factorVersion,
+                                gwpValue: primary.gwpValue.toString(),
+                                gwpSet: primary.gwpSet,
+                                emissionsKgCo2e: primary.emissionsKgCo2e.toString(),
+                                calcEngineVersion: primary.calcEngineVersion,
+                                calculatedAt: primary.calculatedAt.toISOString(),
+                              }}
+                              labelOverrides={labelOverrides}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
-                {primary && (
-                  <div className="mt-2.5">
-                    <CalculationBreakdown
-                      record={{
-                        quantityNormalised: primary.quantityNormalised.toString(),
-                        unitNormalised: primary.unitNormalised,
-                        factorValue: primary.factorValue.toString(),
-                        factorUnitNumerator: primary.factorUnitNumerator,
-                        factorUnitDenominator: primary.factorUnitDenominator,
-                        factorSource: primary.factorSource,
-                        factorVersion: primary.factorVersion,
-                        gwpValue: primary.gwpValue.toString(),
-                        gwpSet: primary.gwpSet,
-                        emissionsKgCo2e: primary.emissionsKgCo2e.toString(),
-                        calcEngineVersion: primary.calcEngineVersion,
-                        calculatedAt: primary.calculatedAt.toISOString(),
-                      }}
-                      labelOverrides={labelOverrides}
-                    />
-                  </div>
-                )}
               </div>
             );
           })}
