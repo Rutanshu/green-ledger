@@ -28,12 +28,18 @@ export type GenerateReportState =
   | null;
 
 function buildSnapshot(agg: ReturnType<typeof aggregateEmissionsForReport>, pickedSiteIds: string[], expandedSiteIds: string[]) {
+  const siteTotals = (rows: typeof agg.bySite) => rows.map((s) => ({ siteId: s.siteId, siteName: s.siteName, kgCo2e: s.kgCo2e.toString() }));
   return {
     totalKgCo2e: agg.totalKgCo2e.toString(),
     totalTonnes: agg.totalTonnes,
     byScope: Object.fromEntries(Object.entries(agg.byScope).map(([k, v]) => [k, v.toString()])),
     byScope3Category: Object.fromEntries(Object.entries(agg.byScope3Category).map(([k, v]) => [k, v.toString()])),
-    bySite: agg.bySite.map((s) => ({ siteId: s.siteId, siteName: s.siteName, kgCo2e: s.kgCo2e.toString() })),
+    bySite: siteTotals(agg.bySite),
+    byScopeAndSite: {
+      SCOPE_1: siteTotals(agg.byScopeAndSite.SCOPE_1),
+      SCOPE_2: siteTotals(agg.byScopeAndSite.SCOPE_2),
+      SCOPE_3: siteTotals(agg.byScopeAndSite.SCOPE_3),
+    },
     recordCount: agg.recordCount,
     // What was actually picked vs. what a descendant roll-up pulled in
     // beyond that — disclosed explicitly rather than folded into a

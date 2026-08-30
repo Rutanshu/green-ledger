@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getCurrentMembership } from "@/lib/demo-org";
 import { orgScopedClient } from "@/lib/db/tenant";
 import { can } from "@/lib/auth/permissions";
@@ -42,6 +43,9 @@ export default async function ReportsPage() {
                   <div className="text-xs text-muted">{r.generatedAt.toISOString().slice(0, 16).replace("T", " ")}</div>
                 </div>
                 <div className="flex gap-2">
+                  <Link href={`/reports/${r.id}`} className="rounded-md border border-border bg-surface px-2.5 py-1 text-xs font-medium hover:bg-track">
+                    View charts
+                  </Link>
                   <a href={`/reports/${r.id}/export?format=csv`} className="rounded-md border border-border bg-surface px-2.5 py-1 text-xs font-medium hover:bg-track">
                     CSV
                   </a>

@@ -21,6 +21,14 @@
   --glass-shadow: 0 8px 32px rgba(11, 11, 11, 0.08);
   --ambient-1: rgba(27, 175, 122, 0.30);
   --ambient-2: rgba(47, 143, 214, 0.24);
+  /* Scope 1/2/3 chart series — first three slots of the validated default
+     categorical palette (dataviz skill), the only ordering that clears
+     the all-pairs CVD/contrast gates in both themes. Slot 3 (aqua) is
+     already this app's own --accent, which is why Scope 3 reads as the
+     "home" color. */
+  --chart-scope-1: #2a78d6;
+  --chart-scope-2: #eb6834;
+  --chart-scope-3: #1baf7a;
 }
 
 @theme inline {
@@ -60,6 +68,9 @@
     --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
     --ambient-1: rgba(25, 158, 112, 0.28);
     --ambient-2: rgba(79, 163, 232, 0.16);
+    --chart-scope-1: #3987e5;
+    --chart-scope-2: #d95926;
+    --chart-scope-3: #199e70;
   }
 }
 

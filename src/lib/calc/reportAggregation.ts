@@ -29,6 +29,8 @@ export interface ReportAggregate {
   byScope: Record<ReportScope, Decimal>;
   byScope3Category: Record<number, Decimal>;
   bySite: SiteTotal[];
+  /** Scope 1/2/3 broken down by site — the Reports page's per-scope bar charts. */
+  byScopeAndSite: Record<ReportScope, SiteTotal[]>;
   recordCount: number;
 }
 
@@ -40,6 +42,11 @@ export function aggregateEmissionsForReport(rows: readonly ReportEmissionRow[]):
   };
   const byScope3Category: Record<number, Decimal> = {};
   const siteTotals = new Map<string, SiteTotal>();
+  const siteTotalsByScope: Record<ReportScope, Map<string, SiteTotal>> = {
+    SCOPE_1: new Map(),
+    SCOPE_2: new Map(),
+    SCOPE_3: new Map(),
+  };
   let total = new Decimal(0);
 
   for (const row of rows) {
@@ -57,14 +64,29 @@ export function aggregateEmissionsForReport(rows: readonly ReportEmissionRow[]):
       siteName: row.siteName,
       kgCo2e: (existing?.kgCo2e ?? new Decimal(0)).plus(kg),
     });
+
+    const scopeMap = siteTotalsByScope[row.scope];
+    const existingInScope = scopeMap.get(row.siteId);
+    scopeMap.set(row.siteId, {
+      siteId: row.siteId,
+      siteName: row.siteName,
+      kgCo2e: (existingInScope?.kgCo2e ?? new Decimal(0)).plus(kg),
+    });
   }
+
+  const sortedByName = (m: Map<string, SiteTotal>) => [...m.values()].sort((a, b) => a.siteName.localeCompare(b.siteName));
 
   return {
     totalKgCo2e: total,
     totalTonnes: total.div(1000).toFixed(2),
     byScope,
     byScope3Category,
-    bySite: [...siteTotals.values()].sort((a, b) => a.siteName.localeCompare(b.siteName)),
+    bySite: sortedByName(siteTotals),
+    byScopeAndSite: {
+      SCOPE_1: sortedByName(siteTotalsByScope.SCOPE_1),
+      SCOPE_2: sortedByName(siteTotalsByScope.SCOPE_2),
+      SCOPE_3: sortedByName(siteTotalsByScope.SCOPE_3),
+    },
     recordCount: rows.length,
   };
 }

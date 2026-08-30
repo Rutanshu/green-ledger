@@ -63,4 +63,23 @@ describe('aggregateEmissionsForReport', () => {
     ]);
     expect(result.totalKgCo2e.toString()).toBe('0.3');
   });
+
+  it('breaks each scope down by site, independently of the other scopes', () => {
+    const result = aggregateEmissionsForReport([
+      row({ scope: 'SCOPE_1', siteId: 'a', siteName: 'Ashford Data Centre', emissionsKgCo2e: '100' }),
+      row({ scope: 'SCOPE_2', siteId: 'a', siteName: 'Ashford Data Centre', emissionsKgCo2e: '40' }),
+      row({ scope: 'SCOPE_1', siteId: 'b', siteName: 'Riverside Office', emissionsKgCo2e: '10' }),
+      row({ scope: 'SCOPE_3', siteId: 'b', siteName: 'Riverside Office', scope3Category: 6, emissionsKgCo2e: '5' }),
+    ]);
+    expect(result.byScopeAndSite.SCOPE_1.map((s) => [s.siteName, s.kgCo2e.toString()])).toEqual([
+      ['Ashford Data Centre', '100'],
+      ['Riverside Office', '10'],
+    ]);
+    expect(result.byScopeAndSite.SCOPE_2.map((s) => [s.siteName, s.kgCo2e.toString()])).toEqual([
+      ['Ashford Data Centre', '40'],
+    ]);
+    expect(result.byScopeAndSite.SCOPE_3.map((s) => [s.siteName, s.kgCo2e.toString()])).toEqual([
+      ['Riverside Office', '5'],
+    ]);
+  });
 });

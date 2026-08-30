@@ -2,6 +2,7 @@
 
 import { useState, useActionState } from "react";
 import { generateReport } from "./actions";
+import { ReportCharts } from "./ReportCharts";
 
 interface Period {
   id: string;
@@ -140,9 +141,6 @@ export function ReportWizardForm({ periods, sites, anySiteHasChildren }: { perio
               </a>
             </div>
           </div>
-          <div className="mt-3 text-[24px] font-semibold tracking-tight">
-            {state.figuresSnapshot.totalTonnes} <span className="text-sm font-medium text-ink2">tCO2e</span>
-          </div>
           {state.figuresSnapshot.expandedSiteIds.length > 0 && (
             <div className="mt-2 text-[12px] text-ink2">
               Includes {state.figuresSnapshot.expandedSiteIds.length} nested facilit
@@ -153,16 +151,12 @@ export function ReportWizardForm({ periods, sites, anySiteHasChildren }: { perio
                 .join(", ")}
             </div>
           )}
-          <div className="mt-3 grid grid-cols-3 gap-2 text-[13px]">
-            {Object.entries(state.figuresSnapshot.byScope).map(([scope, kg]) => (
-              <div key={scope} className="rounded-md border border-border bg-plane p-2.5">
-                <div className="text-[11px] uppercase tracking-wide text-muted">{scope.replace("_", " ")}</div>
-                <div className="font-medium">{(Number(kg) / 1000).toFixed(2)} t</div>
-              </div>
-            ))}
-          </div>
+
+          <ReportCharts figures={state.figuresSnapshot} />
+
           {state.figuresSnapshot.bySite.length > 0 && (
             <div className="mt-3 flex flex-col gap-1 text-[13px]">
+              <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">By facility, table view</div>
               {state.figuresSnapshot.bySite.map((s) => (
                 <div key={s.siteId} className="flex justify-between">
                   <span className="text-ink2">{s.siteName}</span>
