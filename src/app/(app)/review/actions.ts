@@ -85,7 +85,7 @@ export async function unlockPositionValue(_prev: WorkflowState, formData: FormDa
   const db = orgScopedClient(org.id);
   const positionValue = await db.positionValue.findFirst({
     where: { id: positionValueId, site: { organizationId: org.id } },
-    include: { period: true },
+    include: { period: true, position: true },
   });
   if (!positionValue) return { ok: false, error: "Entry not found." };
   if (positionValue.status !== "APPROVED") return { ok: false, error: "This entry isn't approved — nothing to unlock." };
@@ -99,9 +99,20 @@ export async function unlockPositionValue(_prev: WorkflowState, formData: FormDa
     throw e;
   }
 
-  const assignment = await db.questionnaireAssignment.findFirst({
-    where: { siteId: positionValue.siteId, reportingPeriodId: positionValue.reportingPeriodId },
+  // A site can hold up to 17 assignments (one per scope) sharing the same
+  // (siteId, reportingPeriodId) — an unscoped findFirst would resolve
+  // whichever one Postgres happens to return first and could bounce the
+  // WRONG scope's assignment back to IN_REVIEW. Trace this value's own
+  // question back to its section's template instead.
+  const question = await db.question.findFirst({
+    where: { code: positionValue.position.positionCode },
+    include: { section: true },
   });
+  const assignment = question
+    ? await db.questionnaireAssignment.findFirst({
+        where: { siteId: positionValue.siteId, reportingPeriodId: positionValue.reportingPeriodId, templateId: question.section.templateId },
+      })
+    : null;
 
   const escapedOrgId = org.id.replace(/'/g, "''");
   await rawPrisma.$transaction(async (tx) => {

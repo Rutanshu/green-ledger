@@ -8,9 +8,9 @@ export function LockPeriodButton({ periodId, readiness }: { periodId: string; re
 
   const checks = [
     {
-      label: "Every facility approved",
-      ok: readiness.totalFacilities > 0 && readiness.approvedFacilities === readiness.totalFacilities,
-      detail: `${readiness.approvedFacilities} of ${readiness.totalFacilities}`,
+      label: "Every facility-scope approved",
+      ok: readiness.totalAssignments > 0 && readiness.approvedAssignments === readiness.totalAssignments,
+      detail: `${readiness.approvedAssignments} of ${readiness.totalAssignments}`,
     },
     {
       label: "No blocking data-quality flags open",

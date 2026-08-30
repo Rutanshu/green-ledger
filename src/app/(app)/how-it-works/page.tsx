@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AlertTriangle } from "lucide-react";
 import { getCurrentOrg } from "@/lib/demo-org";
 import { orgScopedClient } from "@/lib/db/tenant";
 import { CONSOLIDATION_LABEL } from "@/lib/org/consolidationLabel";
@@ -17,12 +18,15 @@ async function getChecklistData() {
   if (!org) return null;
   const db = orgScopedClient(org.id);
 
-  const [siteCount, assetCount, labelCount, factorSetCount, template, memberCount, startedAssignments, totalAssignments] = await Promise.all([
+  const [siteCount, assetCount, labelCount, factorSetCount, templates, memberCount, startedAssignments, totalAssignments] = await Promise.all([
     db.site.count(),
     db.siteAsset.count(),
     db.labelOverride.count(),
     db.emissionFactorSet.count(),
-    db.questionnaireTemplate.findFirst({
+    // Up to 17 published templates now (one per scope) — findMany, not
+    // findFirst, or this would silently check only whichever one template
+    // Prisma returns first and miss a broken binding sitting in any other.
+    db.questionnaireTemplate.findMany({
       where: { status: "PUBLISHED" },
       include: { sections: { include: { questions: { include: { binding: true } } } } },
     }),
@@ -31,10 +35,10 @@ async function getChecklistData() {
     db.questionnaireAssignment.count(),
   ]);
 
-  const bindings = (template?.sections ?? []).flatMap((s) => s.questions).map((q) => q.binding).filter((b) => b !== null);
+  const bindings = templates.flatMap((t) => t.sections).flatMap((s) => s.questions).map((q) => q.binding).filter((b) => b !== null);
   const broken = bindings.filter((b) => b!.health === "BROKEN" || b!.health === "AMBIGUOUS").length;
 
-  return { org, siteCount, assetCount, labelCount, factorSetCount, template, broken, memberCount, startedAssignments, totalAssignments };
+  return { org, siteCount, assetCount, labelCount, factorSetCount, templates, broken, memberCount, startedAssignments, totalAssignments };
 }
 
 function Check({ done, partial }: { done?: boolean; partial?: boolean }) {
@@ -130,9 +134,11 @@ export default async function HowItWorksPage() {
               <div className="flex-1">
                 <div className="font-medium">Questionnaire built</div>
                 <p className="text-[13px] text-ink2">
-                  {data.template ? `"${data.template.name}" published.` : "No template published."}{" "}
+                  {data.templates.length > 0 ? `${data.templates.length} scope templates published.` : "No templates published."}{" "}
                   {data.broken > 0 && (
-                    <span className="font-medium text-crit">⛔ {data.broken} broken bindings</span>
+                    <span className="inline-flex items-center gap-1 font-medium text-crit">
+                      <AlertTriangle className="h-3.5 w-3.5" /> {data.broken} broken bindings
+                    </span>
                   )}
                 </p>
               </div>

@@ -28,6 +28,9 @@ let originalPeriodStatus: string;
 let cleaningSpendQuestionId: string;
 let cleaningSpendPositionId: string;
 let readOnlyUserId: string;
+let scope1AssignmentId: string;
+let originalScope1Status: string;
+let originalScope1SubmittedById: string | null;
 
 vi.mock('next/headers', () => ({
   cookies: async () => ({
@@ -41,7 +44,7 @@ vi.mock('next/headers', () => ({
 vi.mock('next/cache', () => ({ revalidatePath: () => {} }));
 vi.mock('next/navigation', () => ({ redirect: () => {} }));
 
-const { submitAnswer } = await import('./actions');
+const { submitAnswer, approveAssignment } = await import('./actions');
 
 function positionValueKey(positionId: string) {
   return { positionId_siteId_reportingPeriodId_line: { positionId, siteId, reportingPeriodId: periodId, line: 1 } } as const;
@@ -65,8 +68,14 @@ beforeAll(async () => {
 
   const site = await rawPrisma.site.findFirstOrThrow({ where: { organizationId: orgId, code: 'MI-NG-01' } });
   siteId = site.id;
-  const assignment = await rawPrisma.questionnaireAssignment.findFirstOrThrow({ where: { siteId: site.id } });
+  // A site can now hold up to 17 assignments (one per scope template) —
+  // pick the Scope 1 one explicitly, since diesel_qty (this file's main
+  // fixture question) lives in that template.
+  const assignment = await rawPrisma.questionnaireAssignment.findFirstOrThrow({ where: { siteId: site.id, template: { name: 'Scope 1' } } });
   assignmentId = assignment.id;
+  scope1AssignmentId = assignment.id;
+  originalScope1Status = assignment.status;
+  originalScope1SubmittedById = assignment.submittedById;
   periodId = assignment.reportingPeriodId;
 
   const period = await rawPrisma.reportingPeriod.findFirstOrThrow({ where: { id: periodId } });
@@ -109,9 +118,13 @@ afterAll(async () => {
   if (originalValue !== null && originalUnit !== null) {
     await rawPrisma.positionValue.update({
       where: positionValueKey(dieselPositionId),
-      data: { valueNumeric: originalValue, unit: originalUnit as never },
+      data: { valueNumeric: originalValue, unit: originalUnit as never, status: 'ANSWERED', approvedById: null, approvedAt: null },
     });
   }
+  await rawPrisma.questionnaireAssignment.update({
+    where: { id: scope1AssignmentId },
+    data: { status: originalScope1Status as never, submittedById: originalScope1SubmittedById, approverId: null, approvedAt: null },
+  });
   await rawPrisma.reportingPeriod.update({ where: { id: periodId }, data: { status: originalPeriodStatus as never } });
   await rawPrisma.organization.delete({ where: { id: otherOrgId } });
   await rawPrisma.$disconnect();
@@ -256,5 +269,31 @@ describe('submitAnswer', () => {
 
     const records = await rawPrisma.emissionRecord.findMany({ where: { activityRecordId: activity!.id } });
     expect(records).toHaveLength(0); // exactly zero rows — not one row holding a fabricated 0
+  });
+});
+
+describe('approveAssignment scoping (a site can hold up to 17 assignments — one per scope template)', () => {
+  it("approving one scope's assignment does not sweep another scope's answered-but-unapproved value", async () => {
+    // cleaning_spend belongs to the Scope 3.1 template, not Scope 1 — the
+    // previous test left it ANSWERED (broken binding, so never calculated,
+    // but still a real saved answer). Confirm that starting state first,
+    // so this test fails loudly if a prior test's cleanup changes it out
+    // from under us instead of silently passing for the wrong reason.
+    const cleaningBefore = await rawPrisma.positionValue.findUniqueOrThrow({ where: positionValueKey(cleaningSpendPositionId) });
+    expect(cleaningBefore.status).toBe('ANSWERED');
+
+    // Simulate "already submitted for review" directly — this test is
+    // about approveAssignment's scoping, not the submit flow itself.
+    await rawPrisma.questionnaireAssignment.update({ where: { id: scope1AssignmentId }, data: { status: 'IN_REVIEW', submittedById: null } });
+
+    sessionUserId = (await rawPrisma.membership.findFirstOrThrow({ where: { organizationId: orgId, role: 'SUPER_ADMIN' } })).userId;
+    const result = await approveAssignment(scope1AssignmentId);
+    expect(result?.ok).toBe(true);
+
+    const dieselAfter = await rawPrisma.positionValue.findUniqueOrThrow({ where: positionValueKey(dieselPositionId) });
+    expect(dieselAfter.status).toBe('APPROVED'); // Scope 1's own answer — correctly swept
+
+    const cleaningAfter = await rawPrisma.positionValue.findUniqueOrThrow({ where: positionValueKey(cleaningSpendPositionId) });
+    expect(cleaningAfter.status).toBe('ANSWERED'); // Scope 3.1's answer — must NOT be touched by approving Scope 1
   });
 });

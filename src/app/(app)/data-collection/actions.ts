@@ -509,8 +509,19 @@ export async function submitAssignment(assignmentId: string, opts?: { partial?: 
 
   try {
     if (opts?.partial) {
+      // Scoped to this assignment's OWN template's questions — a site can
+      // now hold up to 17 assignments (one per scope) sharing the same
+      // (siteId, reportingPeriodId), so an unscoped count would let a
+      // Scope 1 assignment with zero answers pass purely because some
+      // other scope has answers.
+      const questionCodes = await db.question.findMany({ where: { section: { templateId: assignment.templateId } }, select: { code: true } });
       const answeredCount = await db.positionValue.count({
-        where: { siteId: assignment.siteId, reportingPeriodId: assignment.reportingPeriodId, status: { in: ["ANSWERED", "APPROVED"] } },
+        where: {
+          siteId: assignment.siteId,
+          reportingPeriodId: assignment.reportingPeriodId,
+          status: { in: ["ANSWERED", "APPROVED"] },
+          position: { positionCode: { in: questionCodes.map((q) => q.code) } },
+        },
       });
       assertHasReleasableAnswers(answeredCount);
     } else {
@@ -579,8 +590,18 @@ export async function approveAssignment(assignmentId: string): Promise<WorkflowS
     throw e;
   }
 
+  // Scoped to this assignment's OWN template's questions — see the
+  // matching comment in submitAssignment. Without this, approving one
+  // scope's assignment would sweep every OTHER scope's ANSWERED values
+  // to APPROVED too, and could get blocked by a FLAGGED value that
+  // belongs to a completely unrelated scope.
+  const questionCodes = await db.question.findMany({ where: { section: { templateId: assignment.templateId } }, select: { code: true } });
   const positionValues = await db.positionValue.findMany({
-    where: { siteId: assignment.siteId, reportingPeriodId: assignment.reportingPeriodId },
+    where: {
+      siteId: assignment.siteId,
+      reportingPeriodId: assignment.reportingPeriodId,
+      position: { positionCode: { in: questionCodes.map((q) => q.code) } },
+    },
   });
   if (positionValues.some((v) => v.status === "FLAGGED")) {
     return { ok: false, error: "One or more answers are flagged for correction — resolve those first." };

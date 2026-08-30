@@ -9,6 +9,7 @@ import { rawPrisma } from "@/lib/db/client";
 import { recordAudit } from "@/lib/audit";
 import { can, ROLE_LABEL } from "@/lib/auth/permissions";
 import { computeSitePath, SiteCycleError, SiteDepthExceededError } from "@/lib/sites";
+import { computeCompleteness, type VisibilityContext, type VisibilityRule } from "@/lib/visibility";
 
 const CreateSiteInput = z.object({
   name: z.string().trim().min(1, "Give the facility a name."),
@@ -74,8 +75,17 @@ export async function createSite(_prev: CreateSiteState, formData: FormData): Pr
     throw e;
   }
 
-  const [template, period] = await Promise.all([
-    db.questionnaireTemplate.findFirst({ where: { status: "PUBLISHED" } }),
+  // Up to 17 published templates now (one per scope) — a new facility
+  // gets one assignment per template that actually has a question
+  // applicable to it. A brand-new site has no assets yet, so an
+  // asset-gated scope (a refrigerant top-up template, say) correctly
+  // gets no assignment until that asset exists; a spend-based scope
+  // that isn't asset-gated gets one right away.
+  const [templates, period] = await Promise.all([
+    db.questionnaireTemplate.findMany({
+      where: { status: "PUBLISHED" },
+      include: { sections: { include: { questions: true } } },
+    }),
     db.reportingPeriod.findFirst({ where: { status: { in: ["DRAFT", "IN_REVIEW"] } }, orderBy: { startsOn: "desc" } }),
   ]);
 
@@ -105,18 +115,35 @@ export async function createSite(_prev: CreateSiteState, formData: FormData): Pr
       after: created,
     });
 
-    if (template && period) {
-      const assignment = await tx.questionnaireAssignment.create({
-        data: { templateId: template.id, siteId: created.id, reportingPeriodId: period.id, status: "NOT_STARTED" },
-      });
-      await recordAudit(tx, {
-        organizationId: org.id,
-        actorUserId: membership.user.id,
-        action: "CREATE",
-        entityType: "QuestionnaireAssignment",
-        entityId: assignment.id,
-        after: assignment,
-      });
+    if (period) {
+      const ctx: VisibilityContext = {
+        siteType,
+        siteCountry: country,
+        assets: [], // brand new — nothing commissioned yet
+        answers: {},
+        periodStart: period.startsOn,
+        periodEnd: period.endsOn,
+      };
+      for (const t of templates) {
+        const questions = t.sections.flatMap((s) => s.questions);
+        const completeness = computeCompleteness(
+          { questions: questions.map((q) => ({ code: q.code, isRequired: q.isRequired, visibleIf: q.visibleIf as VisibilityRule | null })), satisfied: new Set() },
+          ctx,
+        );
+        if (completeness.applicable === 0) continue;
+
+        const assignment = await tx.questionnaireAssignment.create({
+          data: { templateId: t.id, siteId: created.id, reportingPeriodId: period.id, status: "NOT_STARTED" },
+        });
+        await recordAudit(tx, {
+          organizationId: org.id,
+          actorUserId: membership.user.id,
+          action: "CREATE",
+          entityType: "QuestionnaireAssignment",
+          entityId: assignment.id,
+          after: assignment,
+        });
+      }
     }
 
     return created;

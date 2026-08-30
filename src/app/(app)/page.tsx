@@ -22,9 +22,12 @@ async function getDashboardData() {
   if (!org) return null;
 
   const db = orgScopedClient(org.id);
-  const [sites, template, emissionRecords, labelOverrides] = await Promise.all([
+  const [sites, templates, emissionRecords, labelOverrides] = await Promise.all([
     db.site.findMany({ include: { assignments: true }, orderBy: { code: "asc" } }),
-    db.questionnaireTemplate.findFirst({
+    // Up to 17 published templates now (one per scope) — findMany, not
+    // findFirst, or this would silently check only whichever one template
+    // Prisma returns first and miss a broken binding sitting in any other.
+    db.questionnaireTemplate.findMany({
       where: { status: "PUBLISHED" },
       include: { sections: { include: { questions: { include: { binding: true } } } } },
     }),
@@ -44,7 +47,8 @@ async function getDashboardData() {
     getOrgLabelOverrides(org.id),
   ]);
 
-  const bindings = (template?.sections ?? [])
+  const bindings = templates
+    .flatMap((t) => t.sections)
     .flatMap((s) => s.questions)
     .map((q) => q.binding)
     .filter((b): b is NonNullable<typeof b> => b !== null);

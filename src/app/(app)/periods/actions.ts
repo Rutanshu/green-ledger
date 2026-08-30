@@ -317,8 +317,11 @@ export async function decideRestatementAction(restatementId: string, decision: "
 }
 
 export interface PeriodReadiness {
-  totalFacilities: number;
-  approvedFacilities: number;
+  /** A facility now holds up to 17 assignments (one per scope template) —
+   * this counts assignment ROWS, not facilities. See LockPeriodButton.tsx
+   * for how this is worded to the user. */
+  totalAssignments: number;
+  approvedAssignments: number;
   openBlockingViolations: number;
   brokenBindings: number;
   ready: boolean;
@@ -328,13 +331,14 @@ export interface PeriodReadiness {
  * The period-close gate — one function, used both to render the
  * checklist and (server-side, re-checked rather than trusted from the
  * client) to refuse lockPeriod if anything is still open. A standard
- * ERP release checklist: every facility approved, no BLOCK-severity
- * rule violations open, no broken/ambiguous emission-source bindings.
+ * ERP release checklist: every scope-assignment approved, no
+ * BLOCK-severity rule violations open, no broken/ambiguous emission-source
+ * bindings in ANY of the org's (up to 17) published templates.
  */
 async function getPeriodReadiness(db: ReturnType<typeof orgScopedClient>, periodId: string): Promise<PeriodReadiness> {
   const assignments = await db.questionnaireAssignment.findMany({ where: { reportingPeriodId: periodId } });
-  const totalFacilities = assignments.length;
-  const approvedFacilities = assignments.filter((a) => a.status === "APPROVED" || a.status === "LOCKED").length;
+  const totalAssignments = assignments.length;
+  const approvedAssignments = assignments.filter((a) => a.status === "APPROVED" || a.status === "LOCKED").length;
 
   const openBlockingViolations = await db.ruleViolation.count({
     where: {
@@ -344,22 +348,23 @@ async function getPeriodReadiness(db: ReturnType<typeof orgScopedClient>, period
     },
   });
 
-  const template = await db.questionnaireTemplate.findFirst({
+  const templates = await db.questionnaireTemplate.findMany({
     where: { status: "PUBLISHED" },
     include: { sections: { include: { questions: { include: { binding: true } } } } },
   });
-  const brokenBindings = (template?.sections ?? [])
+  const brokenBindings = templates
+    .flatMap((t) => t.sections)
     .flatMap((s) => s.questions)
     .map((q) => q.binding)
     .filter((b): b is NonNullable<typeof b> => b !== null)
     .filter((b) => b.health === "BROKEN" || b.health === "AMBIGUOUS").length;
 
   return {
-    totalFacilities,
-    approvedFacilities,
+    totalAssignments,
+    approvedAssignments,
     openBlockingViolations,
     brokenBindings,
-    ready: totalFacilities > 0 && approvedFacilities === totalFacilities && openBlockingViolations === 0 && brokenBindings === 0,
+    ready: totalAssignments > 0 && approvedAssignments === totalAssignments && openBlockingViolations === 0 && brokenBindings === 0,
   };
 }
 
@@ -397,9 +402,10 @@ export async function lockPeriod(_prev: LockPeriodState, formData: FormData): Pr
   const readiness = await getPeriodReadiness(db, periodId);
   if (!readiness.ready) {
     const reasons: string[] = [];
-    if (readiness.totalFacilities === 0) reasons.push("no facilities are assigned to this period");
-    else if (readiness.approvedFacilities < readiness.totalFacilities) {
-      reasons.push(`${readiness.totalFacilities - readiness.approvedFacilities} facilit${readiness.totalFacilities - readiness.approvedFacilities === 1 ? "y isn't" : "ies aren't"} approved yet`);
+    if (readiness.totalAssignments === 0) reasons.push("no facilities are assigned to this period");
+    else if (readiness.approvedAssignments < readiness.totalAssignments) {
+      const outstanding = readiness.totalAssignments - readiness.approvedAssignments;
+      reasons.push(`${outstanding} facility-scope${outstanding === 1 ? " isn't" : "s aren't"} approved yet`);
     }
     if (readiness.openBlockingViolations > 0) reasons.push(`${readiness.openBlockingViolations} blocking data-quality flag${readiness.openBlockingViolations === 1 ? "" : "s"} still open`);
     if (readiness.brokenBindings > 0) reasons.push(`${readiness.brokenBindings} emission source${readiness.brokenBindings === 1 ? " has" : "s have"} no factor linked`);
