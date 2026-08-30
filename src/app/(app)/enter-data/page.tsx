@@ -20,7 +20,10 @@ export default async function EnterDataPage() {
   const sites = await db.site.findMany({
     orderBy: { code: "asc" },
     include: {
+      // Excludes the pre-split "Standard Operations" template (ARCHIVED,
+      // kept only for history) — nothing left in it to enter.
       assignments: {
+        where: { template: { status: { not: "ARCHIVED" } } },
         include: {
           period: true,
           template: { include: { sections: { include: { questions: true } } } },
@@ -29,13 +32,13 @@ export default async function EnterDataPage() {
     },
   });
 
-  const writableSites = sites.filter((s) => {
-    const a = s.assignments[0];
-    return a && isPeriodWritable(a.period.status);
-  });
+  // A facility can hold up to 17 assignments now — one wizard "site" step
+  // per (site, assignment), not per site, since each scope is submitted
+  // and reviewed independently.
+  const writableEntries = sites.flatMap((s) => s.assignments.filter((a) => isPeriodWritable(a.period.status)).map((assignment) => ({ site: s, assignment })));
 
   const positionValues = await db.positionValue.findMany({
-    where: { siteId: { in: writableSites.map((s) => s.id) } },
+    where: { siteId: { in: writableEntries.map((e) => e.site.id) } },
     include: { position: true },
   });
   const valueByKey = new Map(
@@ -45,7 +48,7 @@ export default async function EnterDataPage() {
   // Prior period's value, for the "last time you entered this" comparison
   // on the value step — looked up directly rather than trusting
   // PositionValue.priorPeriodValue, which nothing in this codebase writes yet.
-  const periodIds = [...new Set(writableSites.map((s) => s.assignments[0].reportingPeriodId))];
+  const periodIds = [...new Set(writableEntries.map((e) => e.assignment.reportingPeriodId))];
   const periods = await db.reportingPeriod.findMany({ where: { id: { in: periodIds } } });
   const priorPeriods = await db.reportingPeriod.findMany({
     where: { endsOn: { lt: periods.length ? new Date(Math.min(...periods.map((p) => p.startsOn.getTime()))) : new Date(0) } },
@@ -59,7 +62,7 @@ export default async function EnterDataPage() {
   const priorIds = [...new Set([...priorPeriodByCurrentId.values()].map((p) => p.id))];
   const priorValues = priorIds.length
     ? await db.positionValue.findMany({
-        where: { siteId: { in: writableSites.map((s) => s.id) }, reportingPeriodId: { in: priorIds } },
+        where: { siteId: { in: writableEntries.map((e) => e.site.id) }, reportingPeriodId: { in: priorIds } },
         include: { position: true },
       })
     : [];
@@ -67,8 +70,7 @@ export default async function EnterDataPage() {
     priorValues.map((v) => [`${v.siteId}:${v.reportingPeriodId}:${v.position.positionCode}`, v]),
   );
 
-  const wizardSites: WizardSite[] = writableSites.map((site) => {
-    const assignment = site.assignments[0];
+  const wizardSites: WizardSite[] = writableEntries.map(({ site, assignment }) => {
     const questions = assignment.template.sections
       .flatMap((s) => s.questions)
       .filter((q) => q.allowedUnits.length > 0);
@@ -78,6 +80,7 @@ export default async function EnterDataPage() {
       siteId: site.id,
       siteName: site.name,
       siteCode: site.code,
+      scopeLabel: assignment.template.name,
       assignmentId: assignment.id,
       periodLabel: assignment.period.label,
       questions: questions.map((q) => {

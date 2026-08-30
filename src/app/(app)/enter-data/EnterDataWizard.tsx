@@ -24,6 +24,10 @@ export interface WizardSite {
   siteId: string;
   siteName: string;
   siteCode: string;
+  /** The scope template this entry is for — a facility now holds up to
+   * 17 of these (Scope 1, Scope 2, Scope 3.1…3.15), each its own
+   * independently-submitted step-0 choice. */
+  scopeLabel: string;
   assignmentId: string;
   periodLabel: string;
   questions: WizardQuestion[];
@@ -56,7 +60,9 @@ function RowKV({ k, v }: { k: string; v: string }) {
 
 export function EnterDataWizard({ sites, labelOverrides }: { sites: WizardSite[]; labelOverrides: readonly LabelOverride[] }) {
   const [stepIndex, setStepIndex] = useState(0);
-  const [siteId, setSiteId] = useState<string | null>(null);
+  // Selects a (site, scope) entry — a facility can hold up to 17 of
+  // these, so the assignment id (not the site id) is the unique key.
+  const [selectedAssignmentId, setSelectedAssignmentId] = useState<string | null>(null);
   const [questionId, setQuestionId] = useState<string | null>(null);
 
   // Every field the final submit needs, lifted here — the wizard is one
@@ -79,15 +85,15 @@ export function EnterDataWizard({ sites, labelOverrides }: { sites: WizardSite[]
     formRef.current?.requestSubmit();
   }
 
-  const site = sites.find((s) => s.siteId === siteId) ?? null;
+  const site = sites.find((s) => s.assignmentId === selectedAssignmentId) ?? null;
   const question = site?.questions.find((q) => q.questionId === questionId) ?? null;
 
   function go(i: number) {
     setStepIndex(Math.max(0, Math.min(STEPS.length - 1, i)));
   }
 
-  function chooseSite(id: string) {
-    setSiteId(id);
+  function chooseSite(assignmentId: string) {
+    setSelectedAssignmentId(assignmentId);
     setQuestionId(null);
     go(1);
   }
@@ -102,7 +108,7 @@ export function EnterDataWizard({ sites, labelOverrides }: { sites: WizardSite[]
   }
 
   function reset() {
-    setSiteId(null);
+    setSelectedAssignmentId(null);
     setQuestionId(null);
     setValue("");
     setQuality("ESTIMATED");
@@ -162,23 +168,33 @@ export function EnterDataWizard({ sites, labelOverrides }: { sites: WizardSite[]
       <StepBar index={stepIndex} />
 
       {stepIndex === 0 && (
-        <div className="flex flex-col gap-2.5">
-          <div className="text-[15px] font-medium">Which facility?</div>
-          {sites.map((s) => (
-            <button
-              key={s.siteId}
-              type="button"
-              onClick={() => chooseSite(s.siteId)}
-              className="glass flex items-center justify-between rounded-[11px] p-4 text-left hover:bg-track"
-            >
-              <div>
-                <div className="text-[14.5px] font-medium">{s.siteName}</div>
-                <div className="text-[12.5px] text-muted">
-                  {s.siteCode} · {s.periodLabel}
-                </div>
+        <div className="flex flex-col gap-4">
+          <div className="text-[15px] font-medium">Which facility, and which scope?</div>
+          {Object.entries(
+            sites.reduce<Record<string, WizardSite[]>>((groups, s) => {
+              (groups[s.siteId] ??= []).push(s);
+              return groups;
+            }, {}),
+          ).map(([siteId, entries]) => (
+            <div key={siteId} className="flex flex-col gap-1.5">
+              <div className="text-[13px] font-semibold text-ink2">
+                {entries[0].siteName} <span className="font-normal text-muted">({entries[0].siteCode})</span>
               </div>
-              <span className="text-muted">→</span>
-            </button>
+              {entries.map((s) => (
+                <button
+                  key={s.assignmentId}
+                  type="button"
+                  onClick={() => chooseSite(s.assignmentId)}
+                  className="glass flex items-center justify-between rounded-[11px] p-3.5 text-left hover:bg-track"
+                >
+                  <div>
+                    <div className="text-[14px] font-medium">{s.scopeLabel}</div>
+                    <div className="text-[12px] text-muted">{s.periodLabel}</div>
+                  </div>
+                  <span className="text-muted">→</span>
+                </button>
+              ))}
+            </div>
           ))}
         </div>
       )}
