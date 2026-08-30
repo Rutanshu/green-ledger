@@ -4,12 +4,13 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 
 /**
- * Scope 1 / Scope 2 / Scope 3.1–3.15 as distinct, independently
- * addressable units, without splitting the underlying template into 17
- * separate QuestionnaireTemplate rows (which would fragment
- * QuestionnaireAssignment/completeness tracking). Filters which
- * sections page.tsx renders via a ?scope= query param — the template
- * itself stays one row.
+ * Filters Position Library's flat position list to one scope at a time
+ * via a ?scope= query param. (Builder itself no longer uses this —
+ * questions now live in 17 real per-scope templates, so its own
+ * scope-to-scope navigation is TemplateSwitcher.tsx, a link between
+ * pages rather than a filter within one. Position Library stays one
+ * flat, filterable list since a Position isn't owned by any one
+ * template.)
  */
 const SCOPE_3_CATEGORIES = Array.from({ length: 15 }, (_, i) => i + 1);
 

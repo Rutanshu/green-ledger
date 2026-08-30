@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Suspense } from "react";
 import { getCurrentMembership } from "@/lib/demo-org";
 import { orgScopedClient } from "@/lib/db/tenant";
 import { can } from "@/lib/auth/permissions";
@@ -14,7 +13,7 @@ import { BindingForm } from "../BindingForm";
 import { AddPositionToSectionForm } from "../AddPositionToSectionForm";
 import { deleteSection, deleteQuestion, removeSectionItem } from "../actions";
 import { PublishButton } from "../PublishButton";
-import { ScopeSubNav } from "../ScopeSubNav";
+import { TemplateSwitcher, type SiblingTemplate } from "../TemplateSwitcher";
 
 export const dynamic = "force-dynamic";
 
@@ -30,21 +29,14 @@ const STATUS_STYLE: Record<string, string> = {
   ARCHIVED: "bg-track text-muted",
 };
 
-export default async function TemplateEditorPage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ templateId: string }>;
-  searchParams: Promise<{ scope?: string }>;
-}) {
+export default async function TemplateEditorPage({ params }: { params: Promise<{ templateId: string }> }) {
   const { templateId } = await params;
-  const { scope: scopeFilter } = await searchParams;
   const membership = await getCurrentMembership();
   if (!membership) return null;
   const canEdit = can(membership.role, "manage_questionnaire");
   const db = orgScopedClient(membership.org.id);
 
-  const [template, labelOverrides, allPositions] = await Promise.all([
+  const [template, labelOverrides, allPositions, siblingRows] = await Promise.all([
     db.questionnaireTemplate.findFirst({
       where: { id: templateId },
       include: {
@@ -59,19 +51,22 @@ export default async function TemplateEditorPage({
     }),
     getOrgLabelOverrides(membership.org.id),
     db.position.findMany({ select: { id: true, positionCode: true, labelKey: true, type: true }, orderBy: { positionCode: "asc" } }),
+    // For the sibling switcher below — every other scope template this
+    // template can be a tab alongside, not just this one's own sections.
+    db.questionnaireTemplate.findMany({
+      where: { status: { not: "ARCHIVED" } },
+      select: { id: true, name: true, sections: { take: 1, select: { scope: true, scope3Category: true } } },
+    }),
   ]);
   if (!template) notFound();
 
-  // Section title matches "3.1", scope="SCOPE_3"/scope3Category=1 — the
-  // key ScopeSubNav's tabs use ("1", "2", "3.1" … "3.15").
-  const sectionScopeKey = (s: (typeof template.sections)[number]) =>
-    s.scope === "SCOPE_3" && s.scope3Category ? `3.${s.scope3Category}` : s.scope === "SCOPE_1" ? "1" : "2";
-  const scopeCounts: Record<string, number> = {};
-  for (const s of template.sections) {
-    const key = sectionScopeKey(s);
-    scopeCounts[key] = (scopeCounts[key] ?? 0) + 1;
-  }
-  const visibleSections = scopeFilter ? template.sections.filter((s) => sectionScopeKey(s) === scopeFilter) : template.sections;
+  const scopeKeyOf = (scope?: string, cat?: number | null) =>
+    scope === "SCOPE_1" ? "1" : scope === "SCOPE_2" ? "2" : scope === "SCOPE_3" && cat ? `3.${cat}` : null;
+  const sortKeyOf = (scope?: string, cat?: number | null) =>
+    !scope ? "zzz" : `${scope}.${cat != null ? String(cat).padStart(2, "0") : "00"}`;
+  const siblings: SiblingTemplate[] = [...siblingRows]
+    .sort((a, b) => sortKeyOf(a.sections[0]?.scope, a.sections[0]?.scope3Category).localeCompare(sortKeyOf(b.sections[0]?.scope, b.sections[0]?.scope3Category)))
+    .map((t) => ({ id: t.id, name: t.name, scopeKey: scopeKeyOf(t.sections[0]?.scope, t.sections[0]?.scope3Category) }));
 
   const questionCount = template.sections.reduce((n, s) => n + s.questions.length + s.items.length, 0);
   const boundCount =
@@ -104,13 +99,11 @@ export default async function TemplateEditorPage({
       )}
 
       <div className="mt-5">
-        <Suspense fallback={null}>
-          <ScopeSubNav counts={scopeCounts} />
-        </Suspense>
+        <TemplateSwitcher templates={siblings} currentId={template.id} />
       </div>
 
       <div className="mt-5 flex flex-col gap-4">
-        {visibleSections.map((section) => (
+        {template.sections.map((section) => (
           <div key={section.id} className="glass rounded-[11px]">
             <div className="flex items-start justify-between gap-3 border-b border-grid p-4">
               <div>
